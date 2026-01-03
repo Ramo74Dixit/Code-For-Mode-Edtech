@@ -9,6 +9,7 @@ const generateToken = (id) => {
 // @route   POST /api/auth/register
 exports.register = async (req, res) => {
   try {
+    if (!req.body) req.body = {};
     const { name, email, password, role } = req.body;
 
     const userExists = await User.findOne({ email });
@@ -37,6 +38,7 @@ exports.register = async (req, res) => {
 // @route   POST /api/auth/login
 exports.login = async (req, res) => {
   try {
+    if (!req.body) req.body = {};
     const { email, password } = req.body;
 
     const user = await User.findOne({ email }).select('+password');
