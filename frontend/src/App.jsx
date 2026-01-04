@@ -10,8 +10,11 @@ import CourseDetails from './pages/courses/CourseDetails';
 import BatchList from './pages/batches/BatchList';
 import CreateBatch from './pages/batches/CreateBatch';
 import BatchDetails from './pages/batches/BatchDetails';
+import BatchLearningHub from './pages/batches/BatchLearningHub';
 import AssignmentList from './pages/assignments/AssignmentList';
 import LiveSchedule from './pages/live-classes/LiveSchedule';
+import Profile from './pages/profile/Profile';
+import TrainerProfile from './pages/profile/TrainerProfile';
 
 // Temporary protected route wrapper
 const ProtectedRoute = ({ children }) => {
@@ -43,13 +46,16 @@ function App() {
               </Route>
               
               <Route path="batches" element={<Outlet />}>
-                 <Route index element={<BatchList />} />
-                 <Route path="create" element={<CreateBatch />} />
-                 <Route path=":id" element={<BatchDetails />} />
+                 <Route path="/batches" element={<BatchList />} />
+              <Route path="/batches/create" element={<CreateBatch />} />
+              <Route path="/batches/:id" element={<BatchDetails />} />
+              <Route path="/batches/:id/learn" element={<BatchLearningHub />} />
               </Route>
 
               <Route path="assignments" element={<AssignmentList />} />
               <Route path="live-classes" element={<LiveSchedule />} />
+              <Route path="profile" element={<Profile />} />
+              <Route path="trainer/:id" element={<TrainerProfile />} />
             </Route>
           </Routes>
         </div>

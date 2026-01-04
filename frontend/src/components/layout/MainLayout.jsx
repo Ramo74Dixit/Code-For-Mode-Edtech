@@ -70,12 +70,12 @@ const MainLayout = () => {
             </nav>
           </div>
           <div className="mt-auto p-4">
-             <div className="flex items-center gap-4 px-2 py-4 border-t">
+             <Link to="/profile" className="flex items-center gap-4 px-2 py-4 border-t hover:bg-muted/50 transition-colors cursor-pointer rounded-lg">
                 <div className="flex flex-col">
                     <span className="text-sm font-medium">{user?.name}</span>
                     <span className="text-xs text-muted-foreground capitalize">{user?.role}</span>
                 </div>
-             </div>
+             </Link>
              <Button variant="outline" className="w-full justify-start gap-2" onClick={handleLogout}>
                <LogOut className="h-4 w-4" />
                Logout

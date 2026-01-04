@@ -1,16 +1,40 @@
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { BookOpen, Video, Calendar, ArrowRight, Sparkles, PlusCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card';
 import { Button } from '../../components/ui/button'; 
 
+import api from '../../services/api';
+import { useNavigate } from 'react-router-dom';
+
 const StudentDashboard = () => {
     const { user } = useAuth();
+    const navigate = useNavigate();
+    const [availableCourses, setAvailableCourses] = useState([]);
+    const [enrolledCourses, setEnrolledCourses] = useState([]);
+
+    useEffect(() => {
+        const fetchData = async () => {
+            try {
+                // Fetch Available Courses
+                const coursesRes = await api.get('/courses');
+                setAvailableCourses(coursesRes.data.data);
+
+                // Fetch Enrolled Courses
+                const enrollRes = await api.get('/enrollments');
+                setEnrolledCourses(enrollRes.data.data.map(enrollment => enrollment.course));
+            } catch (error) {
+                console.error("Failed to fetch data", error);
+            }
+        };
+        fetchData();
+    }, []);
 
     // Mock data
     const stats = [
         { 
             title: 'Enrolled Courses', 
-            value: '0', 
+            value: enrolledCourses.length.toString(), 
             icon: BookOpen, 
             color: 'text-blue-600 dark:text-blue-400', 
             bg: 'bg-blue-100 dark:bg-blue-900/30',
@@ -91,23 +115,62 @@ const StudentDashboard = () => {
                 {/* My Courses Section */}
                 <Card className="col-span-4 shadow-sm hover:shadow-md transition-shadow duration-200">
                     <CardHeader>
-                        <CardTitle className="text-xl">My Courses</CardTitle>
-                        <CardDescription>Continue where you left off</CardDescription>
+                        <CardTitle className="text-xl">
+                            {parseInt(stats[0].value) > 0 ? 'My Courses' : 'Available Courses'}
+                        </CardTitle>
+                        <CardDescription>
+                            {parseInt(stats[0].value) > 0 ? 'Continue where you left off' : 'Browse our top courses'}
+                        </CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <div className="flex flex-col items-center justify-center py-12 text-center border-2 border-dashed border-gray-200 dark:border-gray-800 rounded-xl bg-gray-50/50 dark:bg-gray-900/50 hover:bg-gray-50 transition-colors">
-                            <div className="bg-white dark:bg-gray-800 p-4 rounded-full shadow-sm mb-4">
-                                <BookOpen className="h-8 w-8 text-gray-400" />
+                        {parseInt(stats[0].value) > 0 ? (
+                           <div className="grid gap-4 sm:grid-cols-2">
+                                {enrolledCourses.filter(Boolean).slice(0, 4).map(course => (
+                                    <div key={course._id} className="border rounded-lg p-4 hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => navigate(`/courses/${course._id}`)}>
+                                        <div className="aspect-video rounded-md overflow-hidden bg-muted mb-3">
+                                             {course.thumbnail ? (
+                                                <img src={course.thumbnail} alt={course.title} className="w-full h-full object-cover" />
+                                             ) : (
+                                                <div className="w-full h-full flex items-center justify-center bg-secondary">
+                                                    <BookOpen className="h-8 w-8 opacity-20" />
+                                                </div>
+                                             )}
+                                        </div>
+                                        <h4 className="font-semibold line-clamp-1">{course.title}</h4>
+                                        <div className="flex justify-between items-center mt-2">
+                                            <span className="text-xs text-muted-foreground bg-green-100 text-green-700 px-2 py-1 rounded-full">Enrolled</span>
+                                        </div>
+                                    </div>
+                                ))}
+                           </div>
+                        ) : (
+                            /* Show Available Courses if None Enrolled */
+                            <div className="grid gap-4 sm:grid-cols-2">
+                                {availableCourses.slice(0, 4).map(course => (
+                                    <div key={course._id} className="border rounded-lg p-4 hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => navigate(`/courses/${course._id}`)}>
+                                        <div className="aspect-video rounded-md overflow-hidden bg-muted mb-3">
+                                             {course.thumbnail ? (
+                                                <img src={course.thumbnail} alt={course.title} className="w-full h-full object-cover" />
+                                             ) : (
+                                                <div className="w-full h-full flex items-center justify-center bg-secondary">
+                                                    <BookOpen className="h-8 w-8 opacity-20" />
+                                                </div>
+                                             )}
+                                        </div>
+                                        <h4 className="font-semibold line-clamp-1">{course.title}</h4>
+                                        <div className="flex justify-between items-center mt-2">
+                                            <span className="text-sm font-bold text-primary">₹{course.price}</span>
+                                            <span className="text-xs text-muted-foreground bg-secondary px-2 py-1 rounded-full">{course.category}</span>
+                                        </div>
+                                    </div>
+                                ))}
+                                {availableCourses.length === 0 && (
+                                     <div className="col-span-full py-12 text-center">
+                                        <p className="text-muted-foreground">No courses available.</p>
+                                     </div>
+                                )}
                             </div>
-                            <h3 className="font-semibold text-lg text-gray-900 dark:text-white">No courses enrolled</h3>
-                            <p className="text-sm text-muted-foreground max-w-sm mt-1 mb-6">
-                                You haven't started any courses yet. Explore our library to find something amazing.
-                            </p>
-                            <Button variant="outline" className="gap-2 group">
-                                Explore Library 
-                                <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
-                            </Button>
-                        </div>
+                        )}
                     </CardContent>
                 </Card>
 

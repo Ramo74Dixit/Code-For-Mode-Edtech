@@ -112,6 +112,7 @@ const ScheduleLiveModal = ({ isOpen, onClose, onSessionScheduled }) => {
                 <div className="space-y-2">
                     <label className="text-sm font-medium">YouTube Live URL</label>
                     <Input name="youtubeLiveUrl" value={formData.youtubeLiveUrl} onChange={handleChange} required placeholder="https://youtube.com/live/..." />
+                    <p className="text-xs text-muted-foreground">This is the link students will use to watch (e.g., from the Share button).</p>
                 </div>
 
                 <div className="space-y-2">

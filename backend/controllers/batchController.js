@@ -2,6 +2,10 @@ const Batch = require('../models/Batch');
 const BatchEnrollment = require('../models/BatchEnrollment');
 const Course = require('../models/Course');
 const User = require('../models/User');
+// Ensure these models are registered for populating
+require('../models/Announcement');
+require('../models/LiveSession');
+require('../models/Assignment');
 
 // @desc    Create new batch
 // @route   POST /api/batches
@@ -64,6 +68,7 @@ exports.getAllBatches = async (req, res) => {
 // @access  Public
 exports.getBatch = async (req, res) => {
   try {
+    console.log("DEBUG: getBatch called with ID:", req.params.id);
     const batch = await Batch.findById(req.params.id)
       .populate('course')
       .populate('trainer', 'name email bio')
@@ -72,6 +77,8 @@ exports.getBatch = async (req, res) => {
       .populate('announcements')
       .populate('assignments');
     
+    console.log("DEBUG: Batch found:", batch ? batch._id : "NULL");
+
     if (!batch) {
       return res.status(404).json({ success: false, message: 'Batch not found' });
     }
@@ -183,7 +190,11 @@ exports.removeVideoFromBatch = async (req, res) => {
   }
 };
 
-// @desc    Enroll student in batch
+const Enrollment = require('../models/Enrollment');
+
+// ... (existing imports)
+
+// @desc    Enroll student in batch (After Course Enrollment)
 // @route   POST /api/batches/:id/enroll
 // @access  Private (Student)
 exports.enrollInBatch = async (req, res) => {
@@ -194,36 +205,47 @@ exports.enrollInBatch = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Batch not found' });
     }
     
+    // 1. Verify Course Enrollment (Payment)
+    const courseEnrollment = await Enrollment.findOne({
+        student: req.user.id,
+        course: batch.course
+    });
+
+    if (!courseEnrollment) {
+        return res.status(403).json({ success: false, message: 'Please enroll in the course first.' });
+    }
+
+    // 2. Check if already joined ANY batch for this course
+    if (courseEnrollment.batch) {
+         // Optional: Allow switching batches? For now strict 1 batch rule as requested.
+         return res.status(400).json({ success: false, message: 'You have already joined a batch for this course.' });
+    }
+
     // Check if batch is full
     if (batch.currentEnrollment >= batch.maxStudents) {
       return res.status(400).json({ success: false, message: 'Batch is full' });
     }
     
-    // Check if already enrolled
-    const existingEnrollment = await BatchEnrollment.findOne({
-      student: req.user.id,
-      batch: req.params.id
-    });
-    
-    if (existingEnrollment) {
-      return res.status(400).json({ success: false, message: 'Already enrolled in this batch' });
-    }
-    
-    // Create enrollment
-    const enrollment = await BatchEnrollment.create({
+    // Create BatchEnrollment (Detailed tracking)
+    const batchEnrollment = await BatchEnrollment.create({
       student: req.user.id,
       batch: req.params.id,
       course: batch.course,
-      paymentAmount: batch.batchPrice
+      paymentAmount: 0, // Paid via Course Enrollment
+      paymentStatus: 'paid'
     });
     
-    // Update batch
+    // Update Main Enrollment with Batch ID
+    courseEnrollment.batch = batch._id;
+    await courseEnrollment.save();
+
+    // Update Batch
     batch.enrolledStudents.push(req.user.id);
     await batch.updateEnrollmentCount();
     
     res.status(201).json({
       success: true,
-      data: enrollment
+      data: batchEnrollment
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

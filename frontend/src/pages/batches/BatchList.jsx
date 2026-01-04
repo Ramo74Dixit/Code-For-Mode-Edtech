@@ -10,25 +10,61 @@ import { cn } from '../../lib/utils';
 
 const BatchList = () => {
   const [batches, setBatches] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const { isTrainer, isAdmin } = useAuth();
   
   const canCreateBatch = isTrainer || isAdmin;
+  const [studentEnrollments, setStudentEnrollments] = useState({});
 
   useEffect(() => {
-    fetchBatches();
+    fetchData();
   }, []);
 
-  const fetchBatches = async () => {
+  const fetchData = async () => {
+    setLoading(true);
     try {
-      const res = await api.get('/batches'); // Should support filtering by backend query params later
-      setBatches(res.data.data);
+      const batchesRes = await api.get('/batches');
+      
+      let finalBatches = batchesRes.data.data;
+      let enrollmentsMap = {};
+
+      if (!isTrainer && !isAdmin) {
+          const enrollRes = await api.get('/enrollments');
+          const enrollments = enrollRes.data.data;
+          const enrolledCourseIds = enrollments.map(e => e.course._id);
+          
+          enrollments.forEach(e => {
+              enrollmentsMap[e.course._id] = e;
+          });
+          setStudentEnrollments(enrollmentsMap);
+
+          finalBatches = finalBatches.filter(b => 
+              enrolledCourseIds.includes(b.course?._id) && 
+              (b.status === 'upcoming' || b.status === 'ongoing')
+          ).sort((a,b) => new Date(b.startDate) - new Date(a.startDate));
+      }
+
+      setBatches(finalBatches);
     } catch (error) {
-      console.error('Failed to fetch batches', error);
+      console.error('Failed to fetch data', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleJoinBatch = async (e, batchId) => {
+      e.preventDefault(); // Prevent Link navigation
+      e.stopPropagation();
+
+      try {
+          await api.post(`/batches/${batchId}/enroll`);
+          alert('Successfully joined the batch!');
+          fetchData(); // Refresh to update UI
+      } catch (error) {
+          console.error('Join Error', error);
+          alert(error.response?.data?.message || 'Failed to join batch');
+      }
   };
 
   const filteredBatches = batches.filter(batch => 
@@ -70,9 +106,14 @@ const BatchList = () => {
       </div>
 
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {filteredBatches.map((batch) => (
+        {filteredBatches.map((batch) => {
+           const myEnrollment = studentEnrollments[batch.course?._id];
+           const isJoinedThis = myEnrollment?.batch?._id === batch._id;
+           const isJoinedOther = myEnrollment?.batch && !isJoinedThis;
+           
+           return (
           <Link key={batch._id} to={`/batches/${batch._id}`}>
-            <Card className="h-full hover:shadow-md transition-shadow cursor-pointer border-l-4 border-l-primary">
+            <Card className={`h-full hover:shadow-md transition-shadow cursor-pointer border-l-4 ${isJoinedThis ? 'border-l-green-500 ring-2 ring-green-500/20' : 'border-l-primary'}`}>
               <CardHeader className="pb-2">
                 <div className="flex justify-between items-start">
                     <CardTitle className="text-xl">{batch.name}</CardTitle>
@@ -100,19 +141,40 @@ const BatchList = () => {
                 </div>
                 
                 <div className="flex items-center justify-between pt-2 border-t mt-4">
-                    <div>
-                        <span className="text-xs text-muted-foreground">Price</span>
-                        <div className="font-bold text-lg">₹{batch.batchPrice}</div>
-                    </div>
-                    <div>
-                         <span className="text-xs text-muted-foreground">Trainer</span>
-                         <div className="text-sm font-medium">{batch.trainer?.name}</div>
-                    </div>
+                    {/* Role specific actions */}
+                    {!isTrainer && !isAdmin ? (
+                        <div className="w-full">
+                            {isJoinedThis ? (
+                                <Button className="w-full bg-green-600 hover:bg-green-700" onClick={(e) => e.preventDefault()}>
+                                    Joined
+                                </Button>
+                            ) : isJoinedOther ? (
+                                <Button variant="secondary" className="w-full" disabled>
+                                    Already in a batch
+                                </Button>
+                            ) : (
+                                <Button className="w-full" onClick={(e) => handleJoinBatch(e, batch._id)}>
+                                    Join Batch
+                                </Button>
+                            )}
+                        </div>
+                    ) : (
+                        <>
+                            <div>
+                                <span className="text-xs text-muted-foreground">Price</span>
+                                <div className="font-bold text-lg">₹{batch.batchPrice}</div>
+                            </div>
+                            <div>
+                                <span className="text-xs text-muted-foreground">Trainer</span>
+                                <div className="text-sm font-medium">{batch.trainer?.name}</div>
+                            </div>
+                        </>
+                    )}
                 </div>
               </CardContent>
             </Card>
           </Link>
-        ))}
+        )})}
         {filteredBatches.length === 0 && (
              <div className="col-span-full text-center py-12 border rounded-lg bg-card border-dashed">
                 <p className="text-muted-foreground">No batches found matching your search.</p>

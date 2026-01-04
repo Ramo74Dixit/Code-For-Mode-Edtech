@@ -37,6 +37,31 @@ const userSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Course'
   }],
+  headline: {
+    type: String,
+    default: ''
+  },
+  resume: {
+    type: String, // URL to resume file
+    default: ''
+  },
+  skills: [{
+    type: String
+  }],
+  socialLinks: {
+    linkedin: { type: String, default: '' },
+    github: { type: String, default: '' },
+    website: { type: String, default: '' },
+    twitter: { type: String, default: '' }
+  },
+  phoneNumber: {
+    type: String,
+    default: ''
+  },
+  location: {
+    type: String,
+    default: ''
+  },
   createdAt: {
     type: Date,
     default: Date.now

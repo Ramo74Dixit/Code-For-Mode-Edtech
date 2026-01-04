@@ -111,7 +111,9 @@ exports.addVideo = async (req, res) => {
 // @route   GET /api/courses/trainer/my-courses
 exports.getTrainerCourses = async (req, res) => {
   try {
+    console.log("DEBUG: getTrainerCourses called for user:", req.user.id);
     const courses = await Course.find({ trainer: req.user.id }).sort('-createdAt');
+    console.log(`DEBUG: Found ${courses.length} courses for trainer ${req.user.id}`);
     res.json({ success: true, count: courses.length, data: courses });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

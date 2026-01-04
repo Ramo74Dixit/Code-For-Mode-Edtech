@@ -1,23 +1,17 @@
 const express = require('express');
 const {
-  getCourses,
-  getCourse,
-  createCourse,
-  updateCourse,
-  deleteCourse,
-  addVideo,
-  getTrainerCourses
-} = require('../controllers/courseController');
-const { protect, authorize } = require('../middleware/auth');
+  getMyEnrollments,
+  enrollCourse,
+  updateProgress
+} = require('../controllers/enrollmentController');
+const { protect } = require('../middleware/auth');
 
 const router = express.Router();
 
-router.get('/', getCourses);
-router.get('/trainer/my-courses', protect, authorize('trainer', 'admin'), getTrainerCourses);
-router.get('/:id', getCourse);
-router.post('/', protect, authorize('trainer', 'admin'), createCourse);
-router.put('/:id', protect, authorize('trainer', 'admin'), updateCourse);
-router.delete('/:id', protect, authorize('trainer', 'admin'), deleteCourse);
-router.post('/:id/videos', protect, authorize('trainer', 'admin'), addVideo);
+router.use(protect); // All enrollment routes needed protection
+
+router.get('/', getMyEnrollments);
+router.post('/:courseId', enrollCourse);
+router.put('/:courseId/progress', updateProgress);
 
 module.exports = router;

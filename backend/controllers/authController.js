@@ -76,3 +76,61 @@ exports.getMe = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// @desc    Update user details
+// @route   PUT /api/auth/updatedetails
+exports.updateDetails = async (req, res) => {
+  try {
+    const fieldsToUpdate = {
+      name: req.body.name,
+      email: req.body.email,
+      headline: req.body.headline,
+      skills: req.body.skills,
+      socialLinks: req.body.socialLinks,
+      phoneNumber: req.body.phoneNumber,
+      location: req.body.location,
+      bio: req.body.bio
+    };
+
+    const user = await User.findByIdAndUpdate(req.user.id, fieldsToUpdate, {
+      new: true,
+      runValidators: true
+    });
+
+    res.json({
+      success: true,
+      data: user
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Get public profile of a user (trainer)
+// @route   GET /api/auth/:id/profile
+exports.getPublicProfile = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id)
+      .select('name email role profileImage headline bio skills socialLinks location createdAt');
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    // Connect to Course model to find courses taught by this user
+    // We need to require Course model inside here or at top if not circular
+    const Course = require('../models/Course'); 
+    const courses = await Course.find({ trainer: req.params.id, isPublished: true })
+      .select('title thumbnail price level language description slug');
+
+    res.json({
+      success: true,
+      data: {
+        user,
+        courses
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};

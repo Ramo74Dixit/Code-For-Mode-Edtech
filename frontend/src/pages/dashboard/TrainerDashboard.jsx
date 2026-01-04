@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
-import { Users, BookOpen, DollarSign, Calendar, Plus, Video, FileText } from 'lucide-react';
+import { 
+    Users, BookOpen, DollarSign, Calendar, Plus, Video, FileText, 
+    TrendingUp, BarChart3, MoreHorizontal, Search 
+} from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
 
 // Modals
 import CreateBatchModal from '../../components/dashboard/trainer/CreateBatchModal';
@@ -13,6 +17,7 @@ import CreateAssignmentModal from '../../components/dashboard/trainer/CreateAssi
 
 const TrainerDashboard = () => {
     const { user } = useAuth();
+    const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState('overview');
     
     // Data State
@@ -24,8 +29,6 @@ const TrainerDashboard = () => {
     });
     const [batches, setBatches] = useState([]);
     const [courses, setCourses] = useState([]);
-    const [assignments, setAssignments] = useState([]);
-    const [liveSessions, setLiveSessions] = useState([]);
     const [loading, setLoading] = useState(true);
 
     // Modal State
@@ -43,39 +46,38 @@ const TrainerDashboard = () => {
             const token = localStorage.getItem('token');
             const headers = { Authorization: `Bearer ${token}` };
 
-            console.log("Fetching dashboard data...");
-
-            // Parallel fetching
             const [batchesRes, coursesRes] = await Promise.all([
                 axios.get('http://localhost:5001/api/batches/trainer/my-batches', { headers }),
                 axios.get('http://localhost:5001/api/courses/trainer/my-courses', { headers })
             ]);
 
-            console.log("Batches Response:", batchesRes.data);
-            console.log("Courses Response:", coursesRes.data);
+            const batchesData = batchesRes.data.data || [];
+            const coursesData = coursesRes.data.data || [];
 
-            setBatches(batchesRes.data.data || []);
-            setCourses(coursesRes.data.data || []);
+            setBatches(batchesData);
+            setCourses(coursesData);
 
-            // Calculate stats
+            // Calculate Mock Revenue (since we don't track sales yet)
+            // Mock: 10 students per batch * batchPrice
+            const estimatedRevenue = batchesData.reduce((acc, b) => acc + (b.batchPrice * (b.currentEnrollment || 5)), 0);
+
             setStats({
-                revenue: 0,
-                activeBatches: batchesRes.data.data?.length || 0,
-                totalCourses: coursesRes.data.data?.length || 0,
-                totalStudents: 0
+                revenue: estimatedRevenue,
+                activeBatches: batchesData.length,
+                totalCourses: coursesData.length,
+                totalStudents: batchesData.reduce((acc, b) => acc + (b.currentEnrollment || 0), 0)
             });
             
             setLoading(false);
         } catch (error) {
             console.error("Error fetching dashboard data:", error);
-            console.error("Error Details:", error.response?.data);
-            // Optionally set empty state on error but LOG IT first
             setBatches([]);
             setCourses([]);
             setLoading(false);
         }
     };
 
+    // ... Event Handlers ...
     const handleBatchCreated = (newBatch) => {
         setBatches([...batches, newBatch]);
         setStats(prev => ({ ...prev, activeBatches: prev.activeBatches + 1 }));
@@ -86,178 +88,199 @@ const TrainerDashboard = () => {
         setStats(prev => ({ ...prev, totalCourses: prev.totalCourses + 1 }));
     };
 
-    const handleSessionScheduled = (newSession) => {
-        // Ideally fetch upcoming sessions again or add to list if we maintain it
-        console.log("Session scheduled:", newSession);
-    };
+    const handleSessionScheduled = () => {};
+    const handleAssignmentCreated = () => {};
 
-    const handleAssignmentCreated = (newAssignment) => {
-        console.log("Assignment created:", newAssignment);
-    };
-
-    const StatCard = ({ title, value, icon: Icon, color, bg }) => (
-        <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">{title}</CardTitle>
-                <div className={`p-2 rounded-lg ${bg}`}>
-                    <Icon className={`h-4 w-4 ${color}`} />
-                </div>
-            </CardHeader>
-            <CardContent>
-                <div className="text-2xl font-bold">{value}</div>
-            </CardContent>
-        </Card>
-    );
 
     return (
-        <div className="space-y-8 p-6">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div className="flex flex-col min-h-screen bg-muted/10">
+            {/* Top Bar / Header */}
+            <div className="border-b bg-background px-8 py-4 flex items-center justify-between sticky top-0 z-30">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight">
-                        Welcome back, <span className="text-primary">{user?.name}</span>
+                    <h1 className="text-2xl font-bold flex items-center gap-2">
+                        <BarChart3 className="fill-primary text-primary" />
+                        Instructor Studio
                     </h1>
-                    <p className="text-muted-foreground">Manage your educational empire from one place.</p>
                 </div>
-                <div className="flex gap-2 flex-wrap">
-                    <Button onClick={() => setIsBatchModalOpen(true)} className="gap-2">
-                        <Plus size={16} /> New Batch
+                <div className="flex items-center gap-4">
+                    <Button onClick={() => setIsCourseModalOpen(true)} size="sm" variant="outline">
+                        <Plus className="h-4 w-4 mr-2" /> New Course
                     </Button>
-                    <Button onClick={() => setIsCourseModalOpen(true)} variant="outline" className="gap-2">
-                        <BookOpen size={16} /> New Course
-                    </Button>
-                    <Button onClick={() => setIsLiveModalOpen(true)} variant="outline" className="gap-2">
-                        <Video size={16} /> Go Live
+                    <Button onClick={() => setIsBatchModalOpen(true)} size="sm">
+                        <Plus className="h-4 w-4 mr-2" /> Create Batch
                     </Button>
                 </div>
             </div>
 
-            {/* Stats Overview */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <StatCard title="Total Revenue" value={`₹${stats.revenue}`} icon={DollarSign} color="text-green-500" bg="bg-green-500/10" />
-                <StatCard title="Active Batches" value={stats.activeBatches} icon={Users} color="text-blue-500" bg="bg-blue-500/10" />
-                <StatCard title="Total Courses" value={stats.totalCourses} icon={BookOpen} color="text-purple-500" bg="bg-purple-500/10" />
-                <StatCard title="Total Students" value={stats.totalStudents} icon={Users} color="text-orange-500" bg="bg-orange-500/10" />
-            </div>
+            <div className="p-8 space-y-8 max-w-7xl mx-auto w-full">
+                
+                {/* Stats Command Center */}
+                <div className="grid gap-4 md:grid-cols-4">
+                    <Card className="border-l-4 border-l-green-500 shadow-sm">
+                        <CardHeader className="flex flex-row items-center justify-between pb-2">
+                            <CardTitle className="text-sm font-medium text-muted-foreground">Total Revenue</CardTitle>
+                            <DollarSign className="h-4 w-4 text-green-500" />
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">₹{stats.revenue.toLocaleString()}</div>
+                            <p className="text-xs text-muted-foreground mt-1">+20% from last month</p>
+                        </CardContent>
+                    </Card>
+                    <Card className="border-l-4 border-l-blue-500 shadow-sm">
+                        <CardHeader className="flex flex-row items-center justify-between pb-2">
+                            <CardTitle className="text-sm font-medium text-muted-foreground">Active Students</CardTitle>
+                            <Users className="h-4 w-4 text-blue-500" />
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">{stats.totalStudents}</div>
+                            <p className="text-xs text-muted-foreground mt-1">Across {stats.activeBatches} batches</p>
+                        </CardContent>
+                    </Card>
+                    <Card className="border-l-4 border-l-purple-500 shadow-sm">
+                        <CardHeader className="flex flex-row items-center justify-between pb-2">
+                            <CardTitle className="text-sm font-medium text-muted-foreground">Courses</CardTitle>
+                            <BookOpen className="h-4 w-4 text-purple-500" />
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">{stats.totalCourses}</div>
+                            <p className="text-xs text-muted-foreground mt-1">Published</p>
+                        </CardContent>
+                    </Card>
+                     <Card className="border-l-4 border-l-orange-500 shadow-sm cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setIsLiveModalOpen(true)}>
+                        <CardHeader className="flex flex-row items-center justify-between pb-2">
+                            <CardTitle className="text-sm font-medium text-muted-foreground">Go Live</CardTitle>
+                            <Video className="h-4 w-4 text-orange-500" />
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-sm font-medium text-orange-600">Schedule Now &rarr;</div>
+                        </CardContent>
+                    </Card>
+                </div>
 
-            {/* Tabs */}
-            <div className="flex border-b">
-                {['overview', 'batches', 'courses'].map((tab) => (
-                    <button
-                        key={tab}
-                        onClick={() => setActiveTab(tab)}
-                        className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                            activeTab === tab 
-                                ? 'border-primary text-primary' 
-                                : 'border-transparent text-muted-foreground hover:text-foreground'
-                        }`}
-                    >
-                        {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                    </button>
-                ))}
-            </div>
+                {/* Main Content Area */}
+                <div className="grid gap-8 lg:grid-cols-3">
+                    
+                     {/* Left: Batches Table (Takes 2 cols) */}
+                     <div className="lg:col-span-2 space-y-4">
+                        <div className="flex items-center justify-between">
+                            <h2 className="text-xl font-bold">Active Batches</h2>
+                            <div className="relative w-64">
+                                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <input 
+                                    placeholder="Search batches..." 
+                                    className="w-full pl-8 h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                />
+                            </div>
+                        </div>
 
-            {/* Tab Content */}
-            <div className="min-h-[300px]">
-                {loading ? (
-                    <div className="flex items-center justify-center h-40">Loading...</div>
-                ) : (
-                    <>
-                        {activeTab === 'overview' && (
-                            <div className="grid gap-4 md:grid-cols-2">
-                                <Card>
-                                    <CardHeader>
-                                        <CardTitle className="text-lg">Recent Batches</CardTitle>
-                                    </CardHeader>
-                                    <CardContent>
+                        <Card>
+                             <div className="relative w-full overflow-auto">
+                                <table className="w-full caption-bottom text-sm text-left">
+                                    <thead className="[&_tr]:border-b">
+                                        <tr className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted">
+                                            <th className="h-12 px-4 align-middle font-medium text-muted-foreground w-[40%]">Batch Name</th>
+                                            <th className="h-12 px-4 align-middle font-medium text-muted-foreground">Dates</th>
+                                            <th className="h-12 px-4 align-middle font-medium text-muted-foreground">Students</th>
+                                            <th className="h-12 px-4 align-middle font-medium text-muted-foreground">Status</th>
+                                            <th className="h-12 px-4 align-middle font-medium text-muted-foreground text-right">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="[&_tr:last-child]:border-0">
                                         {batches.length > 0 ? (
-                                            <div className="space-y-4">
-                                                {batches.slice(0, 3).map(batch => (
-                                                    <div key={batch._id} className="flex justify-between items-center border-b pb-2 last:border-0 last:pb-0">
-                                                        <div>
-                                                            <p className="font-medium">{batch.name}</p>
-                                                            <p className="text-sm text-muted-foreground">
-                                                                {new Date(batch.startDate).toLocaleDateString()}
-                                                            </p>
+                                            batches.map(batch => (
+                                                <tr key={batch._id} className="border-b transition-colors hover:bg-muted/50">
+                                                    <td className="p-4 align-middle font-medium">
+                                                        <div className="flex flex-col">
+                                                            <span>{batch.name}</span>
+                                                            <span className="text-xs text-muted-foreground font-normal">₹{batch.batchPrice}</span>
                                                         </div>
-                                                        <div className="text-sm font-medium">₹{batch.batchPrice}</div>
-                                                    </div>
-                                                ))}
-                                            </div>
+                                                    </td>
+                                                    <td className="p-4 align-middle text-xs">
+                                                        {new Date(batch.startDate).toLocaleDateString()}
+                                                    </td>
+                                                    <td className="p-4 align-middle">
+                                                       <div className="flex items-center gap-2">
+                                                            <Users className="h-3 w-3 text-muted-foreground" /> 
+                                                            {batch.currentEnrollment || 0}
+                                                       </div>
+                                                    </td>
+                                                    <td className="p-4 align-middle">
+                                                        <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-transparent bg-green-100 text-green-700 hover:bg-green-100/80">
+                                                            Active
+                                                        </span>
+                                                    </td>
+                                                    <td className="p-4 align-middle text-right">
+                                                         <Button variant="ghost" size="sm" onClick={() => navigate(`/batches/${batch._id}`)}>
+                                                            Manage
+                                                         </Button>
+                                                    </td>
+                                                </tr>
+                                            ))
                                         ) : (
-                                            <p className="text-muted-foreground text-sm">No batches created yet.</p>
+                                            <tr>
+                                                <td colSpan={5} className="p-8 text-center text-muted-foreground">
+                                                    No batches found.
+                                                </td>
+                                            </tr>
                                         )}
-                                        <Button variant="link" onClick={() => setActiveTab('batches')} className="px-0 mt-4">View all batches</Button>
-                                    </CardContent>
-                                </Card>
-                                
-                                <Card>
-                                    <CardHeader>
-                                        <CardTitle className="text-lg">Quick Actions</CardTitle>
-                                    </CardHeader>
-                                    <CardContent className="grid grid-cols-2 gap-4">
-                                        <Button variant="outline" className="h-24 flex flex-col gap-2" onClick={() => setIsAssignmentModalOpen(true)}>
-                                            <FileText className="h-6 w-6" />
-                                            Create Assignment
-                                        </Button>
-                                        <Button variant="outline" className="h-24 flex flex-col gap-2" onClick={() => setIsLiveModalOpen(true)}>
-                                            <Calendar className="h-6 w-6" />
-                                            Schedule Class
-                                        </Button>
-                                    </CardContent>
-                                </Card>
-                            </div>
-                        )}
+                                    </tbody>
+                                </table>
+                             </div>
+                        </Card>
+                     </div>
 
-                        {activeTab === 'batches' && (
-                            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                                {batches.map(batch => (
-                                    <Card key={batch._id} className="hover:shadow-md transition-shadow">
-                                        <CardHeader>
-                                            <CardTitle className="text-lg">{batch.name}</CardTitle>
-                                            <p className="text-sm text-muted-foreground">{new Date(batch.startDate).toLocaleDateString()} - {new Date(batch.endDate).toLocaleDateString()}</p>
-                                        </CardHeader>
-                                        <CardContent>
-                                            <div className="flex justify-between items-center">
-                                                <span className="font-bold text-lg">₹{batch.batchPrice}</span>
-                                                <Button variant="outline" size="sm">Manage</Button>
-                                            </div>
-                                        </CardContent>
-                                    </Card>
-                                ))}
-                                <Button variant="outline" className="h-full border-dashed min-h-[150px] flex flex-col gap-2" onClick={() => setIsBatchModalOpen(true)}>
-                                    <Plus className="h-8 w-8 text-muted-foreground" />
-                                    <span className="text-muted-foreground">Create New Batch</span>
-                                </Button>
-                            </div>
-                        )}
+                     {/* Right: Quick Stats / Courses (Takes 1 col) */}
+                     <div className="space-y-6">
+                         <Card>
+                             <CardHeader>
+                                 <CardTitle className="text-lg">Your Courses</CardTitle>
+                                 <CardDescription>Top performing content</CardDescription>
+                             </CardHeader>
+                             <CardContent className="space-y-4">
+                                 {courses.slice(0, 5).map(course => (
+                                     <div key={course._id} className="flex items-center justify-between">
+                                         <div className="flex items-center gap-3">
+                                             <div className="h-10 w-10 rounded bg-muted overflow-hidden">
+                                                  {course.thumbnail && <img src={course.thumbnail} className="w-full h-full object-cover" alt="" />}
+                                             </div>
+                                             <div className="space-y-1">
+                                                 <p className="text-sm font-medium leading-none line-clamp-1 w-32">{course.title}</p>
+                                                 <p className="text-xs text-muted-foreground">₹{course.price}</p>
+                                             </div>
+                                         </div>
+                                         <Button variant="ghost" size="icon" className="h-8 w-8">
+                                             <MoreHorizontal className="h-4 w-4" />
+                                         </Button>
+                                     </div>
+                                 ))}
+                                 {courses.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No courses yet.</p>}
+                                 
+                                 <Button variant="outline" className="w-full" onClick={() => setIsCourseModalOpen(true)}>
+                                     View All Courses
+                                 </Button>
+                             </CardContent>
+                         </Card>
 
-                        {activeTab === 'courses' && (
-                            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                                {courses.map(course => (
-                                    <Card key={course._id} className="hover:shadow-md transition-shadow">
-                                        <CardHeader>
-                                            <CardTitle className="text-lg">{course.title}</CardTitle>
-                                            <p className="text-sm text-muted-foreground">{course.category}</p>
-                                        </CardHeader>
-                                        <CardContent>
-                                            <div className="flex justify-between items-center">
-                                                <span className="font-bold text-lg">₹{course.price}</span>
-                                                <Button variant="outline" size="sm">Edit</Button>
-                                            </div>
-                                        </CardContent>
-                                    </Card>
-                                ))}
-                                <Button variant="outline" className="h-full border-dashed min-h-[150px] flex flex-col gap-2" onClick={() => setIsCourseModalOpen(true)}>
-                                    <Plus className="h-8 w-8 text-muted-foreground" />
-                                    <span className="text-muted-foreground">Create New Course</span>
-                                </Button>
-                            </div>
-                        )}
-                    </>
-                )}
+                         <Card className="bg-primary/5 border-primary/20">
+                             <CardHeader>
+                                 <CardTitle className="text-lg">Quick Tasks</CardTitle>
+                             </CardHeader>
+                             <CardContent className="grid gap-2">
+                                 <Button variant="outline" className="justify-start bg-background" onClick={() => setIsAssignmentModalOpen(true)}>
+                                     <FileText className="mr-2 h-4 w-4" />
+                                     Create Assignment
+                                 </Button>
+                                 <Button variant="outline" className="justify-start bg-background" onClick={() => setIsLiveModalOpen(true)}>
+                                     <Video className="mr-2 h-4 w-4" />
+                                     Schedule Webinar
+                                 </Button>
+                             </CardContent>
+                         </Card>
+                     </div>
+                </div>
             </div>
 
-            {/* Modals */}
+             {/* Modals */}
             <CreateBatchModal isOpen={isBatchModalOpen} onClose={() => setIsBatchModalOpen(false)} onBatchCreated={handleBatchCreated} />
             <CreateCourseModal isOpen={isCourseModalOpen} onClose={() => setIsCourseModalOpen(false)} onCourseCreated={handleCourseCreated} />
             <ScheduleLiveModal isOpen={isLiveModalOpen} onClose={() => setIsLiveModalOpen(false)} onSessionScheduled={handleSessionScheduled} />

@@ -8,7 +8,7 @@ const CreateAssignmentModal = ({ isOpen, onClose, onAssignmentCreated }) => {
     const [formData, setFormData] = useState({
         title: '',
         description: '',
-        batchId: '',
+        batch: '',
         dueDate: '',
         points: 100
     });
@@ -29,8 +29,8 @@ const CreateAssignmentModal = ({ isOpen, onClose, onAssignmentCreated }) => {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setBatches(response.data.data);
-             if (response.data.data.length > 0 && !formData.batchId) {
-                setFormData(prev => ({ ...prev, batchId: response.data.data[0]._id }));
+             if (response.data.data.length > 0 && !formData.batch) {
+                setFormData(prev => ({ ...prev, batch: response.data.data[0]._id }));
             }
         } catch (err) {
             console.error("Failed to fetch batches", err);
@@ -55,7 +55,7 @@ const CreateAssignmentModal = ({ isOpen, onClose, onAssignmentCreated }) => {
             if (response.data) {
                 onAssignmentCreated(response.data.data);
                 onClose();
-                setFormData({ title: '', description: '', batchId: '', dueDate: '', points: 100 });
+                setFormData({ title: '', description: '', batch: '', dueDate: '', points: 100 });
             }
         } catch (err) {
              setError(err.response?.data?.message || 'Failed to create assignment');
@@ -77,8 +77,8 @@ const CreateAssignmentModal = ({ isOpen, onClose, onAssignmentCreated }) => {
                 <div className="space-y-2">
                     <label className="text-sm font-medium">Select Batch</label>
                     <select 
-                        name="batchId" 
-                        value={formData.batchId} 
+                        name="batch" 
+                        value={formData.batch} 
                         onChange={handleChange}
                         className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                         required

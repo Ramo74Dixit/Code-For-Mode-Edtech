@@ -44,6 +44,7 @@ exports.getMyEnrollments = async (req, res) => {
   try {
     const enrollments = await Enrollment.find({ student: req.user.id })
       .populate({ path: 'course', populate: { path: 'trainer', select: 'name email' } })
+      .populate('batch', 'name startDate status')
       .sort('-enrolledAt');
 
     res.json({ success: true, count: enrollments.length, data: enrollments });

@@ -97,6 +97,20 @@ const batchSchema = new mongoose.Schema({
     ref: 'Assignment'
   }],
   
+  resources: [{
+    title: String,
+    url: String,
+    type: {
+      type: String,
+      enum: ['pdf', 'image', 'link', 'video', 'other'],
+      default: 'other'
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
+  
   status: {
     type: String,
     enum: ['upcoming', 'ongoing', 'completed', 'cancelled'],

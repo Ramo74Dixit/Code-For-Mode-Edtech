@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useRazorpay } from 'react-razorpay';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
@@ -11,21 +12,120 @@ const CourseDetails = () => {
   const navigate = useNavigate();
   const [course, setCourse] = useState(null);
   const [loading, setLoading] = useState(true);
-  const { isTrainer } = useAuth();
+  const { isTrainer, user } = useAuth(); // Destructure user for email/name prefill if needed
+  const { Razorpay } = useRazorpay();
+  const [isEnrolled, setIsEnrolled] = useState(false);
 
   useEffect(() => {
-    const fetchCourse = async () => {
+    const fetchData = async () => {
       try {
-        const res = await api.get(`/courses/${id}`);
-        setCourse(res.data.data);
+        const [courseRes, enrollRes] = await Promise.all([
+             api.get(`/courses/${id}`),
+             api.get('/enrollments') 
+        ]);
+        
+        setCourse(courseRes.data.data);
+        
+        // Check if enrolled
+        const enrolled = enrollRes.data.data.some(e => e.course._id === id);
+        setIsEnrolled(enrolled);
+
       } catch (error) {
-        console.error('Failed to fetch course', error);
+        console.error('Failed to fetch data', error);
       } finally {
         setLoading(false);
       }
     };
-    fetchCourse();
+    fetchData();
   }, [id]);
+
+  const handleEnroll = async () => {
+      if (!user) {
+          alert('Please login to enroll');
+          return;
+      }
+
+      // If already enrolled, go to batches
+      if (isEnrolled) {
+          navigate('/batches');
+          return;
+      }
+
+      try {
+          if (course.price === 0) {
+              // Free Course Enrollment Logic (Direct Enroll)
+               await api.post(`/enrollments/${id}`); // Assuming existing endpoint works for free
+               alert('Enrolled Successfully!');
+               navigate('/');
+               return;
+          }
+
+          // 1. Create Order
+          const orderRes = await api.post('/payments/create-order', { courseId: id });
+          const { order } = orderRes.data;
+
+          // Handle Mock Order for testing
+          if (order.id.startsWith('order_mock_')) {
+              const verifyRes = await api.post('/payments/verify', {
+                  razorpay_order_id: order.id,
+                  razorpay_payment_id: `pay_mock_${Date.now()}`,
+                  razorpay_signature: 'mock_signature',
+                  courseId: id
+              });
+
+              if (verifyRes.data.success) {
+                  alert('Mock Payment Successful & Enrolled!');
+                  navigate('/'); 
+                  return;
+              }
+          }
+
+          const options = {
+              key: import.meta.env.VITE_RAZORPAY_KEY_ID, // Use env var for key
+              amount: order.amount,
+              currency: order.currency,
+              name: "EdTech Platform",
+              description: `Enrollment for ${course.title}`,
+              order_id: order.id,
+              handler: async function (response) {
+                  // 2. Verify Payment
+                  try {
+                      const verifyRes = await api.post('/payments/verify', {
+                          razorpay_order_id: response.razorpay_order_id,
+                          razorpay_payment_id: response.razorpay_payment_id,
+                          razorpay_signature: response.razorpay_signature,
+                          courseId: id
+                      });
+
+                      if (verifyRes.data.success) {
+                          alert('Payment Successful & Enrolled!');
+                          navigate('/'); // Redirect to Dashboard or Batches
+                      } else {
+                          alert('Payment Verification Failed');
+                      }
+                  } catch (error) {
+                      console.error('Verification Error', error);
+                      alert('Payment Verification Failed');
+                  }
+              },
+              prefill: {
+                  name: user.name,
+                  email: user.email,
+                  contact: user.mobile || '' // Assuming mobile field exists
+              },
+              theme: {
+                  color: "#3399cc"
+              }
+          };
+
+          const rzp1 = new Razorpay(options);
+          rzp1.open();
+
+      } catch (error) {
+          console.error('Enrollment Error', error);
+          alert('Failed to initiate enrollment');
+      }
+  };
 
   if (loading) return <div className="p-10 text-center">Loading details...</div>;
   if (!course) return <div className="p-10 text-center">Course not found</div>;
@@ -79,8 +179,8 @@ const CourseDetails = () => {
                     <CardContent className="p-6 space-y-6">
                         <div className="text-3xl font-bold text-primary">₹{course.price}</div>
                         
-                        <Button className="w-full" size="lg">
-                             Enroll Now
+                        <Button className="w-full" size="lg" onClick={handleEnroll}>
+                             {isEnrolled ? 'Go to Batches' : (course.price === 0 ? 'Enroll for Free' : 'Enroll Now')}
                         </Button>
                         
                         <div className="space-y-4 pt-4 border-t">
@@ -105,12 +205,16 @@ const CourseDetails = () => {
                     <CardHeader>
                         <CardTitle className="text-lg">Instructor</CardTitle>
                     </CardHeader>
-                    <CardContent className="flex items-center gap-4">
-                        <div className="h-12 w-12 rounded-full bg-primary/20 flex items-center justify-center font-bold text-primary">
-                            {course.trainer?.name?.[0] || 'T'}
+                    <CardContent className="flex items-center gap-4 cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => navigate(`/trainer/${course.trainer?._id}`)}>
+                        <div className="h-12 w-12 rounded-full bg-primary/20 flex items-center justify-center font-bold text-primary overflow-hidden">
+                            {course.trainer?.profileImage ? (
+                                <img src={course.trainer.profileImage} alt={course.trainer.name} className="w-full h-full object-cover" />
+                            ) : (
+                                course.trainer?.name?.[0] || 'T'
+                            )}
                         </div>
                         <div>
-                            <div className="font-medium">{course.trainer?.name || 'Trainer Name'}</div>
+                            <div className="font-medium hover:underline">{course.trainer?.name || 'Trainer Name'}</div>
                             <div className="text-xs text-muted-foreground">Expert Instructor</div>
                         </div>
                     </CardContent>
