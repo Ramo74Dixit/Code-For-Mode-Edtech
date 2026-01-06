@@ -14,6 +14,9 @@ app.use('/uploads', express.static('uploads'));
 // Global Request Logger
 app.use((req, res, next) => {
   console.log(`📡 [${req.method}] ${req.url}`);
+  if (req.method === 'POST' || req.method === 'PUT') {
+      console.log("📦 BODY:", JSON.stringify(req.body, null, 2));
+  }
   // console.log("Headers:", JSON.stringify(req.headers, null, 2));
   next();
 });
@@ -25,6 +28,7 @@ app.use('/api/enrollments', require('./routes/enrollments'));
 app.use('/api/batches', require('./routes/batches'));
 app.use('/api/live-sessions', require('./routes/liveStream'));
 app.use('/api/assignments', require('./routes/assignments'));
+app.use('/api/tests', require('./routes/tests'));
 app.use('/api/payments', require('./routes/paymentRoutes'));
 app.use('/api/upload', require('./routes/uploadRoutes'));
 app.use('/api', require('./routes/learningRoutes'));

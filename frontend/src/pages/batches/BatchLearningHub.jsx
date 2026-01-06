@@ -3,13 +3,14 @@ import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
-import { Video, Calendar, FileText, Download, Link as LinkIcon, Users, ArrowLeft, PlayCircle, X, BookOpen } from 'lucide-react';
-import { useAuth } from '../../context/AuthContext';
-import { Input } from '../../components/ui/input';
-import { Textarea } from '../../components/ui/textarea';
+import SubmissionListModal from '../../components/dashboard/trainer/SubmissionListModal';
+import CreateAssignmentModal from '../../components/dashboard/trainer/CreateAssignmentModal';
+import CreateTestModal from '../../components/dashboard/trainer/CreateTestModal';
+import { Video, Calendar, FileText, Download, Link as LinkIcon, Users, ArrowLeft, PlayCircle, X, BookOpen, Code } from 'lucide-react';
 
 const BatchLearningHub = () => {
   const { id } = useParams();
+  console.log("DEBUG: BatchLearningHub render, id:", id);
   const navigate = useNavigate();
   const { user } = useAuth();
   
@@ -17,18 +18,24 @@ const BatchLearningHub = () => {
   const [batch, setBatch] = useState(null);
   const [liveSessions, setLiveSessions] = useState({ upcoming: [], past: [] });
   const [assignments, setAssignments] = useState([]);
+  const [tests, setTests] = useState([]); // [NEW] Tests State
   const [loading, setLoading] = useState(true);
 
   // UI States
   const [playingVideo, setPlayingVideo] = useState(null);
   const [selectedAssignment, setSelectedAssignment] = useState(null);
   const [submissionLink, setSubmissionLink] = useState('');
+  const [submissionFile, setSubmissionFile] = useState(null);
+  const [viewingSubmissionsFor, setViewingSubmissionsFor] = useState(null);
+  const [showCreateAssignmentModal, setShowCreateAssignmentModal] = useState(false);
+  const [showCreateTestModal, setShowCreateTestModal] = useState(false); // [NEW] Test Modal
 
   // Stats
   const [stats, setStats] = useState({
       upcomingClasses: 0,
       activeAssignments: 0,
-      resourcesCount: 0
+      resourcesCount: 0,
+      activeTests: 0
   });
 
   useEffect(() => {
@@ -37,20 +44,23 @@ const BatchLearningHub = () => {
 
   const fetchData = async () => {
     try {
-      const [batchRes, liveRes, assignRes] = await Promise.all([
+      const [batchRes, liveRes, assignRes, testRes] = await Promise.all([
           api.get(`/batches/${id}`),
           api.get(`/batches/${id}/live-sessions`),
-          api.get(`/batches/${id}/assignments`)
+          api.get(`/batches/${id}/assignments`),
+          api.get(`/tests/batch/${id}`) // [NEW] Fetch Tests
       ]);
 
       setBatch(batchRes.data.data);
       setLiveSessions(liveRes.data.data);
       setAssignments(assignRes.data.data);
+      setTests(testRes.data.data);
       
       setStats({
           upcomingClasses: liveRes.data.data.upcoming.length,
           activeAssignments: assignRes.data.data.length,
-          resourcesCount: batchRes.data.data.resources?.length || 0
+          resourcesCount: batchRes.data.data.resources?.length || 0,
+          activeTests: testRes.data.data.length
       });
 
     } catch (error) {
@@ -74,13 +84,30 @@ const BatchLearningHub = () => {
   const handleAssignmentSubmit = async (e) => {
       e.preventDefault();
       try {
-          // Placeholder for submission logic
-          // await api.post(`/assignments/${selectedAssignment._id}/submit`, { link: submissionLink });
-          alert("Submission Successful! (Mock)");
+          let fileUrl = '';
+          
+          if (submissionFile) {
+              const formData = new FormData();
+              formData.append('resource', submissionFile); // Re-use resource upload endpoint
+              const uploadRes = await api.post('/upload/resource', formData, {
+                  headers: { 'Content-Type': 'multipart/form-data' }
+              });
+              fileUrl = uploadRes.data.data;
+          }
+
+          await api.post(`/assignments/${selectedAssignment._id}/submit`, { 
+              submissionLink,
+              fileUrl 
+          });
+
+          alert("Assignment Submitted Successfully!");
           setSelectedAssignment(null);
           setSubmissionLink('');
+          setSubmissionFile(null);
+          fetchData(); // Refresh to update status if needed
       } catch (error) {
-          alert('Failed to submit assignment');
+          console.error("Submission error", error);
+          alert(error.response?.data?.message || 'Failed to submit assignment');
       }
   };
 
@@ -137,6 +164,12 @@ const BatchLearningHub = () => {
                 className={`px-6 py-3 font-medium text-sm transition-colors border-b-2 whitespace-nowrap ${activeTab === 'resources' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
             >
                 Study Materials
+            </button>
+            <button 
+                onClick={() => setActiveTab('tests')}
+                className={`px-6 py-3 font-medium text-sm transition-colors border-b-2 whitespace-nowrap ${activeTab === 'tests' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+            >
+                Coding Tests
             </button>
         </div>
 
@@ -261,6 +294,15 @@ const BatchLearningHub = () => {
 
             {activeTab === 'assignments' && (
                 <div className="grid gap-4 animate-in fade-in zoom-in-95 duration-300">
+                     {/* Trainer Header for Assignments */}
+                     {user.role === 'trainer' && (
+                        <div className="flex justify-end">
+                            <Button onClick={() => setShowCreateAssignmentModal(true)}>
+                                + Create Assignment
+                            </Button>
+                        </div>
+                     )}
+
                      {assignments.length > 0 ? (
                          assignments.map(assign => (
                              <Card key={assign._id} className="hover:border-primary/50 transition-colors">
@@ -276,9 +318,14 @@ const BatchLearningHub = () => {
                                              <span className="text-muted-foreground">Marks: {assign.maxMarks}</span>
                                          </div>
                                      </div>
-                                     <div className="w-full md:w-auto">
+                                     <div className="w-full md:w-auto flex flex-col gap-2">
+                                         {user.role === 'trainer' && (
+                                            <Button variant="outline" className="w-full md:w-auto" onClick={() => setViewingSubmissionsFor(assign)}>
+                                                View Submissions
+                                            </Button>
+                                         )}
                                          <Button className="w-full md:w-auto" onClick={() => setSelectedAssignment(assign)}>
-                                             View & Submit
+                                             {user.role === 'trainer' ? 'Preview' : 'View & Submit'}
                                          </Button>
                                      </div>
                                  </CardContent>
@@ -312,7 +359,57 @@ const BatchLearningHub = () => {
                                      <Button variant="ghost" size="sm" onClick={() => window.open(res.url, '_blank')}>
                                          <Download className="h-4 w-4" />
                                      </Button>
-                                 </div>
+                                     {activeTab === 'tests' && (
+                 <div className="grid gap-4 animate-in fade-in zoom-in-95 duration-300">
+                     {/* Trainer Header for Tests */}
+                     {user.role === 'trainer' && (
+                        <div className="flex justify-end">
+                            <Button onClick={() => setShowCreateTestModal(true)}>
+                                + Create Coding Test
+                            </Button>
+                        </div>
+                     )}
+
+                     {tests.length > 0 ? (
+                         tests.map(test => (
+                             <Card key={test._id} className="hover:border-primary/50 transition-colors">
+                                 <CardContent className="p-6 flex flex-col md:flex-row gap-6 items-start md:items-center">
+                                     <div className="h-12 w-12 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+                                         <Code className="h-6 w-6" />
+                                     </div>
+                                     <div className="flex-1">
+                                         <h3 className="text-lg font-bold">{test.title}</h3>
+                                         <p className="text-muted-foreground text-sm mt-1 mb-2">{test.description}</p>
+                                         <div className="flex flex-wrap gap-4 text-xs font-mono bg-muted/30 p-2 rounded w-fit">
+                                             <span>⏱️ {test.duration} mins</span>
+                                             <span>📅 {new Date(test.startTime).toLocaleString()}</span>
+                                             <span>🧩 {test.questions.length} Questions</span>
+                                         </div>
+                                     </div>
+                                     <div className="w-full md:w-auto flex flex-col gap-2">
+                                         {user.role === 'trainer' ? (
+                                             <div className="text-sm font-medium text-muted-foreground">
+                                                 Test Configured
+                                             </div>
+                                         ) : (
+                                             <Button className="w-full md:w-auto" onClick={() => window.open(`/tests/${test._id}/start`, '_blank')}>
+                                                 Start Test
+                                             </Button>
+                                         )}
+                                     </div>
+                                 </CardContent>
+                             </Card>
+                         ))
+                     ) : (
+                         <div className="text-center py-12 border-2 border-dashed rounded-xl bg-muted/30">
+                            <Code className="h-10 w-10 mx-auto text-muted-foreground/50 mb-3" />
+                            <h3 className="font-medium">No Tests Scheduled</h3>
+                            <p className="text-muted-foreground text-sm">Get ready to code! Tests will appear here.</p>
+                        </div>
+                     )}
+                </div>
+            )}
+        </div>
                              ))
                          ) : (
                              <div className="text-center py-12 border-2 border-dashed rounded-xl bg-muted/30">
@@ -323,6 +420,58 @@ const BatchLearningHub = () => {
                          )}
                      </div>
                  </div>
+            )}
+
+
+            {activeTab === 'tests' && (
+                 <div className="grid gap-4 animate-in fade-in zoom-in-95 duration-300">
+                     {/* Trainer Header for Tests */}
+                     {user.role === 'trainer' && (
+                        <div className="flex justify-end">
+                            <Button onClick={() => setShowCreateTestModal(true)}>
+                                + Create Coding Test
+                            </Button>
+                        </div>
+                     )}
+
+                     {tests.length > 0 ? (
+                         tests.map(test => (
+                             <Card key={test._id} className="hover:border-primary/50 transition-colors">
+                                 <CardContent className="p-6 flex flex-col md:flex-row gap-6 items-start md:items-center">
+                                     <div className="h-12 w-12 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+                                         <Code className="h-6 w-6" />
+                                     </div>
+                                     <div className="flex-1">
+                                         <h3 className="text-lg font-bold">{test.title}</h3>
+                                         <p className="text-muted-foreground text-sm mt-1 mb-2">{test.description}</p>
+                                         <div className="flex flex-wrap gap-4 text-xs font-mono bg-muted/30 p-2 rounded w-fit">
+                                             <span>⏱️ {test.duration} mins</span>
+                                             <span>📅 {new Date(test.startTime).toLocaleString()}</span>
+                                             <span>🧩 {test.questions.length} Questions</span>
+                                         </div>
+                                     </div>
+                                     <div className="w-full md:w-auto flex flex-col gap-2">
+                                         {user.role === 'trainer' ? (
+                                             <div className="text-sm font-medium text-muted-foreground">
+                                                 Test Configured
+                                             </div>
+                                         ) : (
+                                             <Button className="w-full md:w-auto" onClick={() => window.open(`/tests/${test._id}/start`, '_blank')}>
+                                                 Start Test
+                                             </Button>
+                                         )}
+                                     </div>
+                                 </CardContent>
+                             </Card>
+                         ))
+                     ) : (
+                         <div className="text-center py-12 border-2 border-dashed rounded-xl bg-muted/30">
+                            <Code className="h-10 w-10 mx-auto text-muted-foreground/50 mb-3" />
+                            <h3 className="font-medium">No Tests Scheduled</h3>
+                            <p className="text-muted-foreground text-sm">Get ready to code! Tests will appear here.</p>
+                        </div>
+                     )}
+                </div>
             )}
         </div>
 
@@ -431,24 +580,49 @@ const BatchLearningHub = () => {
 
                         <form onSubmit={handleAssignmentSubmit} className="space-y-4 pt-4 border-t">
                              <h4 className="font-semibold">Submit Your Work</h4>
+                             
                              <div className="space-y-2">
-                                 <label className="text-sm font-medium">Project Link / File URL</label>
+                                 <label className="text-sm font-medium">Project Link (Optional)</label>
                                  <Input 
-                                    placeholder="https://github.com/username/project or Google Drive Link" 
+                                    placeholder="https://github.com/..." 
                                     value={submissionLink}
                                     onChange={(e) => setSubmissionLink(e.target.value)}
-                                    required
                                  />
-                                 <p className="text-xs text-muted-foreground">Paste the link to your work (GitHub, Drive, Figma, etc.)</p>
                              </div>
+
+                             <div className="space-y-2">
+                                 <label className="text-sm font-medium">Upload File (Optional)</label>
+                                 <Input 
+                                    type="file"
+                                    onChange={(e) => setSubmissionFile(e.target.files[0])}
+                                 />
+                                 <p className="text-xs text-muted-foreground">PDF, Image, or Zip. Max 10MB.</p>
+                             </div>
+
                              <div className="flex justify-end gap-3 pt-2">
                                  <Button type="button" variant="ghost" onClick={() => setSelectedAssignment(null)}>Cancel</Button>
-                                 <Button type="submit">Submit Assignment</Button>
+                                 <Button type="submit" disabled={!submissionLink && !submissionFile}>Submit Assignment</Button>
                              </div>
                         </form>
                     </div>
                 </div>
             </div>
+        )}
+
+        {showCreateAssignmentModal && (
+            <CreateAssignmentModal 
+                batchId={id} 
+                onClose={() => setShowCreateAssignmentModal(false)} 
+                onSuccess={fetchData} 
+            />
+        )}
+
+        {showCreateTestModal && (
+            <CreateTestModal 
+                batchId={id} 
+                onClose={() => setShowCreateTestModal(false)} 
+                onSuccess={fetchData} 
+            />
         )}
 
     </div>

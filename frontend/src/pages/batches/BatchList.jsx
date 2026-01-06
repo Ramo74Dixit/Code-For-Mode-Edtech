@@ -31,16 +31,21 @@ const BatchList = () => {
 
       if (!isTrainer && !isAdmin) {
           const enrollRes = await api.get('/enrollments');
-          const enrollments = enrollRes.data.data;
-          const enrolledCourseIds = enrollments.map(e => e.course._id);
+          const enrollments = enrollRes.data.data || [];
           
-          enrollments.forEach(e => {
+          // Safety check: Filter out enrollments where course might be null (deleted courses)
+          const validEnrollments = enrollments.filter(e => e && e.course);
+          const enrolledCourseIds = validEnrollments.map(e => e.course._id);
+          
+          // Map for easy lookup
+          validEnrollments.forEach(e => {
               enrollmentsMap[e.course._id] = e;
           });
           setStudentEnrollments(enrollmentsMap);
 
           finalBatches = finalBatches.filter(b => 
-              enrolledCourseIds.includes(b.course?._id) && 
+              b.course && // Ensure batch has a course
+              enrolledCourseIds.includes(b.course._id) && 
               (b.status === 'upcoming' || b.status === 'ongoing')
           ).sort((a,b) => new Date(b.startDate) - new Date(a.startDate));
       }

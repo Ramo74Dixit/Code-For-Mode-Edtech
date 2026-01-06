@@ -10,7 +10,9 @@ const {
   enrollInBatch,
   getMyBatches,
   getTrainerBatches,
-  getBatchStudents
+  getBatchStudents,
+  addResourceToBatch,
+  createAnnouncement
 } = require('../controllers/batchController');
 const { protect, authorize } = require('../middleware/auth');
 
@@ -25,6 +27,8 @@ router.get('/:id/students', protect, authorize('trainer', 'admin'), getBatchStud
 router.post('/', protect, authorize('trainer', 'admin'), createBatch);
 router.post('/:id/enroll', protect, authorize('student'), enrollInBatch);
 router.post('/:id/videos', protect, authorize('trainer', 'admin'), addVideoToBatch);
+router.post('/:id/resources', protect, authorize('trainer', 'admin'), addResourceToBatch);
+router.post('/:id/announcements', protect, authorize('trainer', 'admin'), createAnnouncement);
 
 router.put('/:id', protect, authorize('trainer', 'admin'), updateBatch);
 

@@ -1,49 +1,13 @@
 const multer = require('multer');
-const path = require('path');
 const User = require('../models/User');
+const { storage } = require('../config/cloudinary');
 
-// Configure storage
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    if (file.fieldname === 'avatar') {
-      cb(null, 'uploads/avatars/');
-    } else if (file.fieldname === 'resume') {
-      cb(null, 'uploads/resumes/');
-    } else {
-      cb(new Error('Invalid field name'), false);
-    }
-  },
-  filename: function (req, file, cb) {
-    // Generate unique filename: fieldname-userid-timestamp.ext
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, file.fieldname + '-' + req.user.id + '-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
-
-// File filter
-const fileFilter = (req, file, cb) => {
-  if (file.fieldname === 'avatar') {
-    if (file.mimetype.startsWith('image/')) {
-      cb(null, true);
-    } else {
-      cb(new Error('Not an image! Please upload an image.'), false);
-    }
-  } else if (file.fieldname === 'resume') {
-    if (file.mimetype === 'application/pdf') {
-      cb(null, true);
-    } else {
-      cb(new Error('Not a PDF! Please upload a PDF resume.'), false);
-    }
-  } else {
-    cb(new Error('Unknown field'), false);
-  }
-};
-
+// Use Cloudinary Storage instead of Local DiskStorage
 const upload = multer({ 
   storage: storage,
-  fileFilter: fileFilter,
+  // fileFilter logic is handled by Cloudinary params mostly, but we can keep size limits
   limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB limit
+    fileSize: 10 * 1024 * 1024 // 10MB limit
   }
 });
 
@@ -56,7 +20,7 @@ exports.uploadAvatar = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Please upload a file' });
     }
 
-    const fileUrl = `${req.protocol}://${req.get('host')}/uploads/avatars/${req.file.filename}`;
+    const fileUrl = req.file.path; // Cloudinary returns the full URL in .path
     
     // Update user profile
     await User.findByIdAndUpdate(req.user.id, { profileImage: fileUrl });
@@ -80,7 +44,7 @@ exports.uploadResume = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Please upload a file' });
     }
 
-    const fileUrl = `${req.protocol}://${req.get('host')}/uploads/resumes/${req.file.filename}`;
+    const fileUrl = req.file.path;
     
     // Update user profile
     await User.findByIdAndUpdate(req.user.id, { resume: fileUrl });
@@ -89,6 +53,33 @@ exports.uploadResume = async (req, res) => {
       success: true,
       data: fileUrl,
       message: 'Resume uploaded successfully'
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Upload Generic Resource
+// @route   POST /api/upload/resource
+// @access  Private
+exports.uploadResource = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'Please upload a file' });
+    }
+
+    const fileUrl = req.file.path;
+    
+    // Just return the URL, don't update any specific model as this is generic
+    res.json({
+      success: true,
+      data: fileUrl,
+      message: 'File uploaded successfully',
+      file: {
+        filename: req.file.filename,
+        mimetype: req.file.mimetype,
+        size: req.file.size
+      }
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

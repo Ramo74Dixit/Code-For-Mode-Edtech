@@ -1,125 +1,113 @@
-import React, { useState, useEffect } from 'react';
-import Modal from '../../ui/Modal';
-import { Input } from '../../ui/input';
+import React, { useState } from 'react';
+import { X, Calendar } from 'lucide-react';
+import api from '../../../services/api';
 import { Button } from '../../ui/button';
-import axios from 'axios';
+import { Input } from '../../ui/input';
+import { Textarea } from '../../ui/textarea';
 
-const CreateAssignmentModal = ({ isOpen, onClose, onAssignmentCreated }) => {
+const CreateAssignmentModal = ({ batchId, onClose, onSuccess }) => {
     const [formData, setFormData] = useState({
         title: '',
         description: '',
-        batch: '',
         dueDate: '',
-        points: 100
+        totalMarks: 100
     });
-    const [batches, setBatches] = useState([]);
+    console.log("DEBUG: Modal batchId:", batchId); // Check if prop exists
     const [loading, setLoading] = useState(false);
-    const [error, setError] = useState(null);
-
-    useEffect(() => {
-        if (isOpen) {
-            fetchBatches();
-        }
-    }, [isOpen]);
-
-    const fetchBatches = async () => {
-        try {
-            const token = localStorage.getItem('token');
-            const response = await axios.get('http://localhost:5001/api/batches/trainer/my-batches', {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            setBatches(response.data.data);
-             if (response.data.data.length > 0 && !formData.batch) {
-                setFormData(prev => ({ ...prev, batch: response.data.data[0]._id }));
-            }
-        } catch (err) {
-            console.error("Failed to fetch batches", err);
-        }
-    };
-
-    const handleChange = (e) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
-    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        // FORCE CHECK
+        if (!batchId) {
+            alert("CRITICAL ERROR: batchId is missing! Cannot create assignment.");
+            return;
+        }
+        alert(`DEBUG: Creating assignment for Batch ID: ${batchId}`);
+        
         setLoading(true);
-        setError(null);
-
         try {
-            const token = localStorage.getItem('token');
-            const response = await axios.post('http://localhost:5001/api/assignments', formData, {
-                headers: { Authorization: `Bearer ${token}` }
+            console.log("DEBUG: Sending payload:", { ...formData, batchId });
+            await api.post('/assignments', {
+                ...formData,
+                batchId 
             });
-            
-            if (response.data) {
-                onAssignmentCreated(response.data.data);
-                onClose();
-                setFormData({ title: '', description: '', batch: '', dueDate: '', points: 100 });
-            }
-        } catch (err) {
-             setError(err.response?.data?.message || 'Failed to create assignment');
+            onSuccess();
+            onClose();
+            alert("Assignment created successfully!");
+        } catch (error) {
+            console.error("Creation failed", error);
+            alert(error.response?.data?.message || "Failed to create assignment");
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title="Create Assignment">
-            <form onSubmit={handleSubmit} className="space-y-4">
-                {error && <div className="text-red-500 text-sm p-2 bg-red-500/10 rounded-md">{error}</div>}
-                
-                <div className="space-y-2">
-                    <label className="text-sm font-medium">Assignment Title</label>
-                    <Input name="title" value={formData.title} onChange={handleChange} required placeholder="e.g. Build a Todo App" />
-                </div>
-
-                <div className="space-y-2">
-                    <label className="text-sm font-medium">Select Batch</label>
-                    <select 
-                        name="batch" 
-                        value={formData.batch} 
-                        onChange={handleChange}
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                        required
-                    >
-                        <option value="">Select a batch</option>
-                        {batches.map(batch => (
-                            <option key={batch._id} value={batch._id}>{batch.name}</option>
-                        ))}
-                    </select>
-                </div>
-
-                <div className="space-y-2">
-                    <label className="text-sm font-medium">Description</label>
-                    <textarea 
-                        name="description" 
-                        className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                        value={formData.description} 
-                        onChange={handleChange}
-                        required
-                    />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium">Due Date</label>
-                        <Input type="datetime-local" name="dueDate" value={formData.dueDate} onChange={handleChange} required />
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium">Points</label>
-                        <Input type="number" name="points" value={formData.points} onChange={handleChange} required />
-                    </div>
-                </div>
-
-                <div className="flex justify-end pt-4">
-                    <Button type="button" variant="ghost" onClick={onClose} className="mr-2">Cancel</Button>
-                    <Button type="submit" disabled={loading}>
-                        {loading ? 'Creating...' : 'Create Assignment'}
+        <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+            <div className="w-full max-w-lg bg-card rounded-xl shadow-xl overflow-hidden">
+                <div className="flex items-center justify-between p-6 border-b">
+                    <h2 className="text-xl font-bold">Create New Assignment</h2>
+                    <Button variant="ghost" size="icon" onClick={onClose}>
+                        <X className="h-5 w-5" />
                     </Button>
                 </div>
-            </form>
-        </Modal>
+                
+                <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium">Assignment Title</label>
+                        <Input 
+                            placeholder="e.g. React Components Project" 
+                            value={formData.title} 
+                            onChange={(e) => setFormData({...formData, title: e.target.value})} 
+                            required 
+                        />
+                    </div>
+                    
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium">Description / Instructions</label>
+                        <Textarea 
+                            placeholder="Describe what the students need to do..." 
+                            value={formData.description} 
+                            onChange={(e) => setFormData({...formData, description: e.target.value})} 
+                            required 
+                            rows={4}
+                        />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                             <label className="text-sm font-medium">Due Date</label>
+                             <div className="relative">
+                                 <Input 
+                                    type="datetime-local" 
+                                    value={formData.dueDate} 
+                                    onChange={(e) => setFormData({...formData, dueDate: e.target.value})} 
+                                    required
+                                    className="pl-10"
+                                 />
+                                 <Calendar className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                             </div>
+                        </div>
+                        <div className="space-y-2">
+                             <label className="text-sm font-medium">Total Marks</label>
+                             <Input 
+                                type="number" 
+                                value={formData.totalMarks} 
+                                onChange={(e) => setFormData({...formData, totalMarks: e.target.value})} 
+                                required
+                             />
+                        </div>
+                    </div>
+
+                    <div className="flex justify-end gap-3 pt-4 border-t mt-4">
+                        <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
+                        <Button type="submit" disabled={loading}>
+                            {loading ? 'Creating...' : 'Create Assignment'}
+                        </Button>
+                    </div>
+                </form>
+            </div>
+        </div>
     );
 };
 

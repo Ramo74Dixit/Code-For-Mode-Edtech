@@ -9,7 +9,10 @@ import { useAuth } from '../../context/AuthContext';
 import AddVideoModal from '../../components/dashboard/trainer/AddVideoModal';
 import ScheduleLiveModal from '../../components/dashboard/trainer/ScheduleLiveModal';
 import CreateAssignmentModal from '../../components/dashboard/trainer/CreateAssignmentModal';
+import AddResourceModal from '../../components/dashboard/trainer/AddResourceModal';
+import CreateAnnouncementModal from '../../components/dashboard/trainer/CreateAnnouncementModal';
 import LiveChat from '../../components/chat/LiveChat';
+import { Megaphone, Link as LinkIcon, Download, FileText } from 'lucide-react';
 
 const BatchDetails = () => {
     const { id } = useParams();
@@ -21,6 +24,8 @@ const BatchDetails = () => {
     const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
     const [isLiveModalOpen, setIsLiveModalOpen] = useState(false);
     const [isAssignmentModalOpen, setIsAssignmentModalOpen] = useState(false);
+    const [isResourceModalOpen, setIsResourceModalOpen] = useState(false);
+    const [isAnnouncementModalOpen, setIsAnnouncementModalOpen] = useState(false);
     const [playingVideo, setPlayingVideo] = useState(null);
 
     const [error, setError] = useState(null);
@@ -112,8 +117,10 @@ const BatchDetails = () => {
                         <CardContent>
                              <p className="text-muted-foreground">{batch.description}</p>
                              
-                             <div className="flex border-b mt-6">
-                                {['overview', 'classes', 'content', 'assignments'].map(tab => (
+                             <p className="text-muted-foreground">{batch.description}</p>
+                             
+                             <div className="flex border-b mt-6 overflow-x-auto">
+                                {['overview', 'classes', 'content', 'assignments', 'resources', 'announcements'].map(tab => (
                                     <button
                                         key={tab}
                                         className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors capitalize ${
@@ -324,6 +331,92 @@ const BatchDetails = () => {
                                                 <p>No assignments posted yet.</p>
                                             </div>
                                         )}
+                                      </div>
+                                 )}
+
+                                 {activeTab === 'resources' && (
+                                     <div className="space-y-4">
+                                        <div className="flex justify-between items-center">
+                                            <h3 className="font-semibold text-lg">Study Material</h3>
+                                            {canManage && (
+                                                <Button size="sm" onClick={() => setIsResourceModalOpen(true)}>
+                                                    <FileText className="h-4 w-4 mr-2" />
+                                                    Add Material
+                                                </Button>
+                                            )}
+                                        </div>
+
+                                        {batch.resources?.length > 0 ? (
+                                            <div className="grid gap-3">
+                                                {batch.resources.map((resource, index) => (
+                                                    <a 
+                                                        key={index} 
+                                                        href={resource.url} 
+                                                        target="_blank" 
+                                                        rel="noopener noreferrer"
+                                                        className="flex items-center gap-4 p-4 border rounded-lg hover:bg-muted/50 transition-colors group"
+                                                    >
+                                                        <div className="h-10 w-10 bg-primary/10 rounded-lg flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-colors">
+                                                            {resource.type === 'pdf' ? <FileText className="h-5 w-5" /> : 
+                                                             resource.type === 'video' ? <Video className="h-5 w-5" /> :
+                                                             <LinkIcon className="h-5 w-5" />}
+                                                        </div>
+                                                        <div className="flex-1">
+                                                            <h4 className="font-medium">{resource.title}</h4>
+                                                            <p className="text-xs text-muted-foreground mt-1">
+                                                                {new Date(resource.createdAt).toLocaleDateString()} • {resource.type}
+                                                            </p>
+                                                        </div>
+                                                        <Button variant="ghost" size="icon">
+                                                            <Download className="h-4 w-4" />
+                                                        </Button>
+                                                    </a>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <div className="text-center py-8 text-muted-foreground bg-muted/20 rounded-lg">
+                                                <FileText className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                                                <p>No study materials added yet.</p>
+                                            </div>
+                                        )}
+                                     </div>
+                                 )}
+
+                                 {activeTab === 'announcements' && (
+                                     <div className="space-y-4">
+                                        <div className="flex justify-between items-center">
+                                            <h3 className="font-semibold text-lg">Announcements</h3>
+                                            {canManage && (
+                                                <Button size="sm" onClick={() => setIsAnnouncementModalOpen(true)}>
+                                                    <Megaphone className="h-4 w-4 mr-2" />
+                                                    Make Announcement
+                                                </Button>
+                                            )}
+                                        </div>
+
+                                        {batch.announcements?.length > 0 ? (
+                                            <div className="space-y-4">
+                                                {batch.announcements.map((announcement, index) => (
+                                                    <div key={index} className="p-4 border rounded-lg bg-yellow-50/50 dark:bg-yellow-900/10 border-yellow-100 dark:border-yellow-900/50">
+                                                        <div className="flex justify-between items-start mb-2">
+                                                            <h4 className="font-semibold text-lg flex items-center gap-2">
+                                                                <Megaphone className="h-4 w-4 text-yellow-600" />
+                                                                {announcement.title}
+                                                            </h4>
+                                                            <span className="text-xs text-muted-foreground">
+                                                                {new Date(announcement.createdAt).toLocaleString()}
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-sm text-foreground/80 whitespace-pre-wrap">{announcement.message}</p>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <div className="text-center py-8 text-muted-foreground bg-muted/20 rounded-lg">
+                                                <Megaphone className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                                                <p>No announcements yet.</p>
+                                            </div>
+                                        )}
                                      </div>
                                  )}
                              </div>
@@ -409,6 +502,20 @@ const BatchDetails = () => {
                 onAssignmentCreated={() => {
                     window.location.reload();
                 }}
+            />
+
+            <AddResourceModal
+                isOpen={isResourceModalOpen}
+                onClose={() => setIsResourceModalOpen(false)}
+                batchId={batch._id}
+                onResourceAdded={() => window.location.reload()}
+            />
+
+            <CreateAnnouncementModal
+                isOpen={isAnnouncementModalOpen}
+                onClose={() => setIsAnnouncementModalOpen(false)}
+                batchId={batch._id}
+                onAnnouncementCreated={() => window.location.reload()}
             />
 
             {/* Advanced Video Player Overlay */}

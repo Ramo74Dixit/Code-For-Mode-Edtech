@@ -324,3 +324,64 @@ exports.getBatchStudents = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// @desc    Add resource to batch
+// @route   POST /api/batches/:id/resources
+// @access  Private (Trainer only)
+exports.addResourceToBatch = async (req, res) => {
+  try {
+    const batch = await Batch.findById(req.params.id);
+    
+    if (!batch) {
+      return res.status(404).json({ success: false, message: 'Batch not found' });
+    }
+    
+    if (batch.trainer.toString() !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Not authorized' });
+    }
+    
+    batch.resources.push({
+      ...req.body,
+      createdAt: Date.now()
+    });
+    
+    await batch.save();
+    
+    res.json({ success: true, data: batch });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Create announcement
+// @route   POST /api/batches/:id/announcements
+// @access  Private (Trainer only)
+exports.createAnnouncement = async (req, res) => {
+  try {
+    const batch = await Batch.findById(req.params.id);
+    
+    if (!batch) {
+      return res.status(404).json({ success: false, message: 'Batch not found' });
+    }
+    
+    if (batch.trainer.toString() !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Not authorized' });
+    }
+
+    const Announcement = require('../models/Announcement');
+
+    const announcement = await Announcement.create({
+        title: req.body.title,
+        message: req.body.message,
+        batch: batch._id,
+        trainer: req.user.id
+    });
+    
+    batch.announcements.unshift(announcement._id);
+    await batch.save();
+    
+    res.status(201).json({ success: true, data: announcement });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
