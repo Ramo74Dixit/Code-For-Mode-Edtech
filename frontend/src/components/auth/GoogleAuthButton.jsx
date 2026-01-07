@@ -9,6 +9,7 @@ const GoogleAuthButton = ({ text = "Sign in with Google", role }) => {
 
     const handleSuccess = async (credentialResponse) => {
         try {
+            console.log("Google Login Clicked. Role prop:", role);
             await googleLogin(credentialResponse.credential, role);
             navigate('/');
         } catch (error) {

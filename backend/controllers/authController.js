@@ -140,6 +140,7 @@ exports.getPublicProfile = async (req, res) => {
 exports.googleLogin = async (req, res) => {
     try {
         const { token, role } = req.body; // Get role from request
+        console.log("Google Login Endpoint Hit. Role:", role);
         const { OAuth2Client } = require('google-auth-library');
         const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
