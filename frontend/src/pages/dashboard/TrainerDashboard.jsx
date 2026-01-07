@@ -284,7 +284,13 @@ const TrainerDashboard = () => {
             <CreateBatchModal isOpen={isBatchModalOpen} onClose={() => setIsBatchModalOpen(false)} onBatchCreated={handleBatchCreated} />
             <CreateCourseModal isOpen={isCourseModalOpen} onClose={() => setIsCourseModalOpen(false)} onCourseCreated={handleCourseCreated} />
             <ScheduleLiveModal isOpen={isLiveModalOpen} onClose={() => setIsLiveModalOpen(false)} onSessionScheduled={handleSessionScheduled} />
-            <CreateAssignmentModal isOpen={isAssignmentModalOpen} onClose={() => setIsAssignmentModalOpen(false)} onAssignmentCreated={handleAssignmentCreated} />
+            {isAssignmentModalOpen && (
+                <CreateAssignmentModal 
+                    batchId={/* TODO: Pass selected batch ID */ null} 
+                    onClose={() => setIsAssignmentModalOpen(false)} 
+                    onSuccess={handleAssignmentCreated} 
+                />
+            )}
         </div>
     );
 };

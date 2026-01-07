@@ -75,7 +75,8 @@ exports.getBatch = async (req, res) => {
       .populate('enrolledStudents', 'name email')
       .populate('liveSessions')
       .populate('announcements')
-      .populate('assignments');
+      .populate('assignments')
+      .populate('tests');
     
     console.log("DEBUG: Batch found:", batch ? batch._id : "NULL");
 

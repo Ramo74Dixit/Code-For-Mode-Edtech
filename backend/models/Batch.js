@@ -96,6 +96,10 @@ const batchSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Assignment'
   }],
+  tests: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Test'
+  }],
   
   resources: [{
     title: String,

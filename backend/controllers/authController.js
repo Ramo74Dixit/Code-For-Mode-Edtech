@@ -134,3 +134,60 @@ exports.getPublicProfile = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// @desc    Google Login
+// @route   POST /api/auth/google
+exports.googleLogin = async (req, res) => {
+    try {
+        const { token, role } = req.body; // Get role from request
+        const { OAuth2Client } = require('google-auth-library');
+        const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+        const ticket = await client.verifyIdToken({
+            idToken: token,
+            audience: process.env.GOOGLE_CLIENT_ID
+        });
+        
+        const { name, email, picture, sub: googleId } = ticket.getPayload();
+
+        let user = await User.findOne({ email });
+
+        if (user) {
+            // User exists, just log them in (update googleId/image if needed)
+            if (!user.googleId) {
+                user.googleId = googleId;
+                if (!user.profileImage) user.profileImage = picture;
+                await user.save();
+            }
+        } else {
+            // Create new user with selected role or default to student
+            const crypto = require('crypto');
+            const randomPassword = crypto.randomBytes(16).toString('hex');
+            
+            user = await User.create({
+                name,
+                email,
+                googleId,
+                profileImage: picture,
+                role: role || 'student', 
+                password: randomPassword 
+            });
+        }
+
+        res.json({
+            success: true,
+            data: {
+                _id: user._id,
+                name: user.name,
+                email: user.email,
+                role: user.role,
+                profileImage: user.profileImage,
+                token: generateToken(user._id)
+            }
+        });
+
+    } catch (error) {
+        console.error("Google Auth Error:", error);
+        res.status(500).json({ success: false, message: error.message || 'Google authentication failed' });
+    }
+};

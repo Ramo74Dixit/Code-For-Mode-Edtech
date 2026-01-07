@@ -12,6 +12,7 @@ const TestArena = () => {
     
     const [test, setTest] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [submissionResult, setSubmissionResult] = useState(null);
     
     // Test State
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -126,16 +127,20 @@ const TestArena = () => {
                 language: answers[qId].language
             }));
 
-            await api.post('/tests/submit', {
+            const res = await api.post('/tests/submit', {
                 testId: id,
                 submissions
             });
 
-            alert("Test Submitted Successfully!");
-            navigate(-1); // Go back
+            console.log("Submission Response:", res.data);
+            setSubmissionResult(res.data.data);
+            
+            // alert("Test Submitted Successfully!");
+            // navigate(-1); // Go back
             
         } catch (error) {
-            alert("Submission failed: " + error.message);
+            console.error(error);
+            alert("Submission failed: " + (error.response?.data?.message || error.message));
         }
     };
 

@@ -9,10 +9,12 @@ import { useAuth } from '../../context/AuthContext';
 import AddVideoModal from '../../components/dashboard/trainer/AddVideoModal';
 import ScheduleLiveModal from '../../components/dashboard/trainer/ScheduleLiveModal';
 import CreateAssignmentModal from '../../components/dashboard/trainer/CreateAssignmentModal';
+import CreateTestModal from '../../components/dashboard/trainer/CreateTestModal';
+import TestResultsModal from '../../components/dashboard/trainer/TestResultsModal';
 import AddResourceModal from '../../components/dashboard/trainer/AddResourceModal';
 import CreateAnnouncementModal from '../../components/dashboard/trainer/CreateAnnouncementModal';
 import LiveChat from '../../components/chat/LiveChat';
-import { Megaphone, Link as LinkIcon, Download, FileText } from 'lucide-react';
+import { Megaphone, Link as LinkIcon, Download, FileText, Code } from 'lucide-react';
 
 const BatchDetails = () => {
     const { id } = useParams();
@@ -26,6 +28,8 @@ const BatchDetails = () => {
     const [isAssignmentModalOpen, setIsAssignmentModalOpen] = useState(false);
     const [isResourceModalOpen, setIsResourceModalOpen] = useState(false);
     const [isAnnouncementModalOpen, setIsAnnouncementModalOpen] = useState(false);
+    const [isTestModalOpen, setIsTestModalOpen] = useState(false);
+    const [viewingResultsForTest, setViewingResultsForTest] = useState(null);
     const [playingVideo, setPlayingVideo] = useState(null);
 
     const [error, setError] = useState(null);
@@ -120,7 +124,7 @@ const BatchDetails = () => {
                              <p className="text-muted-foreground">{batch.description}</p>
                              
                              <div className="flex border-b mt-6 overflow-x-auto">
-                                {['overview', 'classes', 'content', 'assignments', 'resources', 'announcements'].map(tab => (
+                                {['overview', 'classes', 'content', 'assignments', 'resources', 'tests', 'announcements'].map(tab => (
                                     <button
                                         key={tab}
                                         className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors capitalize ${
@@ -418,6 +422,65 @@ const BatchDetails = () => {
                                             </div>
                                         )}
                                      </div>
+
+                                 )}
+
+                                 {activeTab === 'tests' && (
+                                     <div className="space-y-4">
+                                        <div className="flex justify-between items-center">
+                                            <h3 className="font-semibold text-lg">Coding Tests</h3>
+                                            {canManage && (
+                                                <Button size="sm" onClick={() => setIsTestModalOpen(true)}>
+                                                    <Code className="h-4 w-4 mr-2" />
+                                                    Create Test
+                                                </Button>
+                                            )}
+                                        </div>
+
+                                        {batch.tests?.length > 0 ? (
+                                            <div className="grid gap-4">
+                                                {batch.tests.map((test, index) => (
+                                                    <div key={index} className="flex gap-4 p-4 border rounded-lg hover:bg-muted/50 transition-colors">
+                                                        <div className="h-16 w-16 bg-primary/10 rounded-lg flex items-center justify-center text-primary">
+                                                            <Code className="h-8 w-8" />
+                                                        </div>
+                                                        <div className="flex-1">
+                                                            <div className="flex justify-between items-start">
+                                                                <div>
+                                                                    <h4 className="font-medium line-clamp-1">{test.title}</h4>
+                                                                    <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{test.questions?.length} Question(s) • {test.timeLimit} mins</p>
+                                                                </div>
+                                                                <div className="text-right">
+                                                                    <Button 
+                                                                        size="sm" 
+                                                                        variant="outline"
+                                                                        onClick={() => window.open(`/tests/${test._id}/start`, '_blank')}
+                                                                    >
+                                                                        View Test
+                                                                    </Button>
+                                                                    {canManage && (
+                                                                        <Button 
+                                                                            size="sm" 
+                                                                            variant="secondary"
+                                                                            className="ml-2"
+                                                                            onClick={() => setViewingResultsForTest(test)}
+                                                                        >
+                                                                            Results
+                                                                        </Button>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <div className="text-center py-8 text-muted-foreground bg-muted/20 rounded-lg">
+                                                <Code className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                                                <p>No coding tests created yet.</p>
+                                            </div>
+                                        )}
+                                      </div>
                                  )}
                              </div>
                         </CardContent>
@@ -496,13 +559,15 @@ const BatchDetails = () => {
                  }}
             />
 
-            <CreateAssignmentModal
-                isOpen={isAssignmentModalOpen}
-                onClose={() => setIsAssignmentModalOpen(false)}
-                onAssignmentCreated={() => {
-                    window.location.reload();
-                }}
-            />
+            {isAssignmentModalOpen && (
+                <CreateAssignmentModal
+                    batchId={batch?._id}
+                    onClose={() => setIsAssignmentModalOpen(false)}
+                    onSuccess={() => {
+                        window.location.reload();
+                    }}
+                />
+            )}
 
             <AddResourceModal
                 isOpen={isResourceModalOpen}
@@ -517,6 +582,22 @@ const BatchDetails = () => {
                 batchId={batch._id}
                 onAnnouncementCreated={() => window.location.reload()}
             />
+
+            {isTestModalOpen && (
+                <CreateTestModal
+                    batchId={batch._id}
+                    onClose={() => setIsTestModalOpen(false)}
+                    onSuccess={() => window.location.reload()}
+                />
+            )}
+
+            {viewingResultsForTest && (
+                <TestResultsModal
+                    testId={viewingResultsForTest._id}
+                    testTitle={viewingResultsForTest.title}
+                    onClose={() => setViewingResultsForTest(null)}
+                />
+            )}
 
             {/* Advanced Video Player Overlay */}
             {playingVideo && (

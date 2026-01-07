@@ -63,6 +63,17 @@ export const AuthProvider = ({ children }) => {
     return userRes.data.data;
   };
 
+  const googleLogin = async (token, role) => {
+    const res = await api.post('/auth/google', { token, role });
+    localStorage.setItem('token', res.data.data.token);
+    
+    // Backend returns user data directly, but consistent verification is good
+    const userRes = await api.get('/auth/me');
+    setUser(userRes.data.data);
+    localStorage.setItem('user', JSON.stringify(userRes.data.data));
+    return userRes.data.data;
+  };
+
   const logout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
@@ -74,6 +85,7 @@ export const AuthProvider = ({ children }) => {
     loading,
     login,
     register,
+    googleLogin,
     logout,
     isAuthenticated: !!user,
     isTrainer: user?.role === 'trainer' || user?.role === 'admin',

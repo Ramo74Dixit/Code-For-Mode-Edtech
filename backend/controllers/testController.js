@@ -33,6 +33,11 @@ exports.createTest = async (req, res) => {
       endTime
     });
 
+    // Add Test to Batch
+    await Batch.findByIdAndUpdate(batchId, {
+      $push: { tests: test._id }
+    });
+
     res.status(201).json({ success: true, data: test });
   } catch (error) {
     console.error("Create Test Error:", error);
@@ -54,7 +59,32 @@ exports.getTestById = async (req, res) => {
     try {
         const test = await Test.findById(req.params.id);
         if (!test) return res.status(404).json({ success: false, message: 'Test not found' });
-        res.json({ success: true, data: test });
+
+        // Check if user has already submitted
+        const submission = await TestSubmission.findOne({
+            test: req.params.id,
+            student: req.user.id
+        });
+
+        res.json({ 
+            success: true, 
+            data: {
+                ...test.toObject(),
+                submission // Will be null if not submitted
+            } 
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+exports.getTestSubmissions = async (req, res) => {
+    try {
+        const submissions = await TestSubmission.find({ test: req.params.id })
+            .populate('student', 'name email')
+            .sort('-totalScore');
+            
+        res.json({ success: true, data: submissions });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -102,25 +132,97 @@ exports.runCode = async (req, res) => {
 };
 
 exports.submitTest = async (req, res) => {
-    // Placeholder for full submission logic (Test Cases Validation)
-    // For now, it will just save the submission state
     try {
         const { testId, submissions } = req.body; // submissions: [{ questionId, code, language }]
         
-        // TODO: Serious logic to run code against HIDDEN test cases here
-        // For MVP step 1, we just save the submission
+        const test = await Test.findById(testId);
+        if (!test) {
+            return res.status(404).json({ success: false, message: 'Test not found' });
+        }
+
+        let totalScore = 0;
+        const results = [];
+
+        // Iterate through each submitted question
+        for (const sub of submissions) {
+            const question = test.questions.id(sub.questionId);
+            if (!question) continue;
+
+            let passedCases = 0;
+            const testCaseResults = [];
+
+            // Run against ALL test cases (Hidden + Public)
+            for (const tc of question.testCases) {
+                try {
+                    const runtime = PISTON_RUNTIMES[sub.language.toLowerCase()];
+                    if (!runtime) throw new Error('Unsupported language');
+
+                    const response = await axios.post('https://emkc.org/api/v2/piston/execute', {
+                        language: runtime.language,
+                        version: runtime.version,
+                        files: [{ content: sub.code }],
+                        stdin: tc.input
+                    });
+
+                    const { run } = response.data;
+                    const cleanOutput = run.stdout ? run.stdout.trim() : "";
+                    const cleanExpected = tc.output.trim();
+                    
+                    const isMatch = cleanOutput === cleanExpected;
+                    if (isMatch) passedCases++;
+
+                    testCaseResults.push({
+                        input: tc.isHidden ? 'Hidden' : tc.input,
+                        output: isMatch ? (tc.isHidden ? 'Hidden' : cleanOutput) : (tc.isHidden ? 'Hidden' : cleanOutput),
+                        expected: tc.isHidden ? 'Hidden' : cleanExpected,
+                        passed: isMatch,
+                        isHidden: tc.isHidden
+                    });
+
+                } catch (err) {
+                    console.error(`Error running test case for Q ${question.problemTitle}:`, err.message);
+                    testCaseResults.push({
+                        input: tc.isHidden ? 'Hidden' : tc.input,
+                        error: 'Execution Error',
+                        passed: false,
+                        isHidden: tc.isHidden
+                    });
+                }
+            }
+
+            // Calculate Score for this question
+            // Points awarded = (Passed Cases / Total Cases) * Question Points
+            const questionScore = Math.round((passedCases / question.testCases.length) * question.points);
+            totalScore += questionScore;
+
+            results.push({
+                questionId: sub.questionId,
+                code: sub.code,
+                language: sub.language,
+                passedCases,
+                totalCases: question.testCases.length,
+                score: questionScore,
+                testCaseResults
+            });
+        }
         
         const submission = await TestSubmission.create({
             test: testId,
             student: req.user.id,
-            sectionSubmissions: submissions, // simple map
+            sectionSubmissions: results,
+            totalScore,
             status: 'submitted',
             submittedAt: new Date()
         });
         
-        res.json({ success: true, message: 'Test submitted successfully', data: submission });
+        res.json({ 
+            success: true, 
+            message: 'Test submitted successfully', 
+            data: submission 
+        });
 
     } catch (error) {
-         res.status(500).json({ success: false, message: error.message });
+        console.error("Submit Test Error:", error);
+        res.status(500).json({ success: false, message: error.message });
     }
 };

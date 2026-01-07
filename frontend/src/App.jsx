@@ -25,9 +25,12 @@ const ProtectedRoute = ({ children }) => {
   return children;
 };
 
+import { GoogleOAuthProvider } from '@react-oauth/google';
+
 function App() {
   return (
     <Router>
+      <GoogleOAuthProvider clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID}>
       <AuthProvider>
         <div className="min-h-screen bg-background text-foreground font-sans antialiased">
           <Routes>
@@ -66,6 +69,7 @@ function App() {
           </Routes>
         </div>
       </AuthProvider>
+      </GoogleOAuthProvider>
     </Router>
   );
 }
