@@ -14,6 +14,7 @@ import TestResultsModal from '../../components/dashboard/trainer/TestResultsModa
 import AddResourceModal from '../../components/dashboard/trainer/AddResourceModal';
 import CreateAnnouncementModal from '../../components/dashboard/trainer/CreateAnnouncementModal';
 import LiveChat from '../../components/chat/LiveChat';
+import BatchChat from '../../components/chat/BatchChat';
 import { Megaphone, Link as LinkIcon, Download, FileText, Code } from 'lucide-react';
 
 const BatchDetails = () => {
@@ -124,7 +125,7 @@ const BatchDetails = () => {
                              <p className="text-muted-foreground">{batch.description}</p>
                              
                              <div className="flex border-b mt-6 overflow-x-auto">
-                                {['overview', 'classes', 'content', 'assignments', 'resources', 'tests', 'announcements'].map(tab => (
+                                {['overview', 'classes', 'content', 'assignments', 'resources', 'tests', 'announcements', 'community'].map(tab => (
                                     <button
                                         key={tab}
                                         className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors capitalize ${
@@ -482,6 +483,9 @@ const BatchDetails = () => {
                                         )}
                                       </div>
                                  )}
+                                  {activeTab === 'community' && (
+                                     <BatchChat roomId={batch._id} title={`${batch.name} Community`} />
+                                  )}
                              </div>
                         </CardContent>
                     </Card>

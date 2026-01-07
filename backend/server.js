@@ -31,7 +31,9 @@ app.use('/api/assignments', require('./routes/assignments'));
 app.use('/api/tests', require('./routes/tests'));
 app.use('/api/payments', require('./routes/paymentRoutes'));
 app.use('/api/upload', require('./routes/uploadRoutes'));
+app.use('/api/admin', require('./routes/admin')); // Register Admin Routes
 app.use('/api', require('./routes/learningRoutes'));
+app.use('/api/chat', require('./routes/chat')); // Register Chat Routes
 
 app.get('/api/health', (req, res) => {
   res.json({ success: true, message: 'Server is running!' });
@@ -52,6 +54,7 @@ app.use((err, req, res, next) => {
 
 const http = require('http');
 const { Server } = require('socket.io');
+const Message = require('./models/Message'); // Import Message Model
 
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -69,8 +72,27 @@ io.on('connection', (socket) => {
     console.log(`User with ID: ${socket.id} joined room: ${data}`);
   });
 
-  socket.on('send_message', (data) => {
-    socket.to(data.room).emit('receive_message', data);
+  socket.on('send_message', async (data) => {
+    try {
+       // Persist message to database
+       const newMessage = await Message.create({
+         room: data.room,
+         sender: data.senderId,
+         content: data.message,
+         attachments: data.attachment ? [data.attachment] : [] // Handle attachment
+       });
+       
+       // Populate sender info before emitting back (optional, but good for real-time UI)
+       // For speed, frontend might just use the data sent, but let's stick to simple echo + persistence first.
+       // Or we can populate:
+       const populatedMessage = await newMessage.populate('sender', 'name profileImage');
+       
+       // Emit the saved message structure (consistent with DB)
+       socket.to(data.room).emit('receive_message', populatedMessage);
+       
+    } catch (err) {
+       console.error("Error saving message:", err);
+    }
   });
 
   socket.on('disconnect', () => {

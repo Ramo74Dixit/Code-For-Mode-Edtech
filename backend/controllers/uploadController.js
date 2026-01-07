@@ -64,6 +64,8 @@ exports.uploadResume = async (req, res) => {
 // @access  Private
 exports.uploadResource = async (req, res) => {
   try {
+    console.log("DEBUG: Upload Resource Hit");
+    console.log("DEBUG: Req File:", req.file);
     if (!req.file) {
       return res.status(400).json({ success: false, message: 'Please upload a file' });
     }

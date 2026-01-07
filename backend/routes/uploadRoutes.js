@@ -7,5 +7,6 @@ const router = express.Router();
 router.post('/avatar', protect, uploadMiddleware.single('avatar'), uploadAvatar);
 router.post('/resume', protect, uploadMiddleware.single('resume'), uploadResume);
 router.post('/resource', protect, uploadMiddleware.single('resource'), uploadResource);
+router.post('/', protect, uploadMiddleware.single('file'), uploadResource); // Generic upload expecting 'file' field
 
 module.exports = router;

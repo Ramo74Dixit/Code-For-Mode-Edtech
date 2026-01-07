@@ -16,6 +16,7 @@ import LiveSchedule from './pages/live-classes/LiveSchedule';
 import TestArena from './pages/tests/TestArena';
 import Profile from './pages/profile/Profile';
 import TrainerProfile from './pages/profile/TrainerProfile';
+import AdminDashboard from './pages/admin/AdminDashboard';
 
 // Temporary protected route wrapper
 const ProtectedRoute = ({ children }) => {
@@ -60,6 +61,7 @@ function App() {
               <Route path="live-classes" element={<LiveSchedule />} />
               <Route path="profile" element={<Profile />} />
               <Route path="trainer/:id" element={<TrainerProfile />} />
+              <Route path="admin" element={<AdminDashboard />} />
             </Route>
             <Route path="tests/:id/start" element={
                <ProtectedRoute>

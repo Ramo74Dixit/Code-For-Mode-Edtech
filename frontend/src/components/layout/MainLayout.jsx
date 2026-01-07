@@ -9,7 +9,8 @@ import {
   Video, 
   LogOut, 
   Menu,
-  X
+  X,
+  Shield
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
@@ -43,6 +44,10 @@ const MainLayout = () => {
     { icon: Users, label: 'Batches', href: '/batches' },
     { icon: Video, label: 'Live Classes', href: '/live-classes' },
   ];
+
+  if (user?.role === 'admin') {
+      navItems.push({ icon: Shield, label: 'Admin', href: '/admin' });
+  }
 
   return (
     // FIX 1: Removed 'grid' classes. Use min-h-screen w-full flex-col
