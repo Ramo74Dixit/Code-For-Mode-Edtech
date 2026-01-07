@@ -1,4 +1,4 @@
-const Enrollment = require('../models/Enrollment');
+const BatchEnrollment = require('../models/BatchEnrollment');
 const Course = require('../models/Course');
 const User = require('../models/User');
 
@@ -11,7 +11,7 @@ exports.enrollCourse = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Course not found' });
     }
 
-    const existingEnrollment = await Enrollment.findOne({
+    const existingEnrollment = await BatchEnrollment.findOne({
       student: req.user.id,
       course: req.params.courseId
     });
@@ -20,12 +20,31 @@ exports.enrollCourse = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Already enrolled' });
     }
 
-    const enrollment = await Enrollment.create({
+    // For manual free enrollment, we need a batch
+    const Batch = require('../models/Batch');
+    let batch = await Batch.findOne({ course: req.params.courseId }).sort('-createdAt');
+    if (!batch) {
+        batch = await Batch.create({
+            title: `${course.title} - Self Paced`,
+            course: req.params.courseId,
+            trainer: course.trainer,
+            startDate: new Date(),
+            students: []
+        });
+    }
+
+    const enrollment = await BatchEnrollment.create({
       student: req.user.id,
+      batch: batch._id,
       course: req.params.courseId,
+      enrollmentStatus: 'active',
       paymentStatus: course.price === 0 ? 'free' : 'paid',
       paymentAmount: course.price
     });
+    
+    // Add student to batch
+    batch.enrolledStudents.push(req.user.id);
+    await batch.save();
 
     course.studentsEnrolled += 1;
     await course.save();
@@ -42,9 +61,13 @@ exports.enrollCourse = async (req, res) => {
 // @route   GET /api/enrollments
 exports.getMyEnrollments = async (req, res) => {
   try {
-    const enrollments = await Enrollment.find({ student: req.user.id })
+    const enrollments = await BatchEnrollment.find({ student: req.user.id })
       .populate({ path: 'course', populate: { path: 'trainer', select: 'name email' } })
-      .populate('batch', 'name startDate status')
+      .populate({
+        path: 'batch',
+        select: 'name startDate status enrolledStudents',
+        populate: { path: 'enrolledStudents', select: '_id' } // Just count needed usually, or IDs
+      })
       .sort('-enrolledAt');
 
     res.json({ success: true, count: enrollments.length, data: enrollments });
@@ -59,7 +82,7 @@ exports.updateProgress = async (req, res) => {
   try {
     const { videoId, isCompleted } = req.body;
 
-    const enrollment = await Enrollment.findOne({
+    const enrollment = await BatchEnrollment.findOne({
       student: req.user.id,
       course: req.params.courseId
     });

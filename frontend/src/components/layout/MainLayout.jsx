@@ -10,7 +10,8 @@ import {
   LogOut, 
   Menu,
   X,
-  Shield
+  Shield,
+  MessageSquare
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
@@ -43,6 +44,7 @@ const MainLayout = () => {
     { icon: BookOpen, label: 'Courses', href: '/courses' },
     { icon: Users, label: 'Batches', href: '/batches' },
     { icon: Video, label: 'Live Classes', href: '/live-classes' },
+    { icon: MessageSquare, label: 'Community', href: '/community' },
   ];
 
   if (user?.role === 'admin') {

@@ -8,7 +8,8 @@ const {
   markAttendance,
   updateLiveSession,
   deleteLiveSession,
-  getMyUpcomingLiveSessions
+  getMyUpcomingLiveSessions,
+  getMyAllLiveSessions
 } = require('../controllers/liveStreamController');
 const { protect, authorize } = require('../middleware/auth');
 
@@ -16,6 +17,7 @@ const router = express.Router();
 
 router.get('/batch/:batchId', protect, getBatchLiveSessions);
 router.get('/my/upcoming', protect, authorize('student'), getMyUpcomingLiveSessions);
+router.get('/my/all', protect, authorize('student'), getMyAllLiveSessions);
 router.get('/:id', protect, getLiveSession);
 
 router.post('/', protect, authorize('trainer', 'admin'), scheduleLiveSession);

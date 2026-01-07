@@ -247,3 +247,40 @@ exports.getMyUpcomingLiveSessions = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// @desc    Get all live sessions for student (Upcoming & Past)
+// @route   GET /api/live-sessions/my/all
+// @access  Private (Student)
+exports.getMyAllLiveSessions = async (req, res) => {
+  try {
+    const enrollments = await BatchEnrollment.find({ student: req.user.id });
+    const batchIds = enrollments.map(e => e.batch);
+    
+    const allSessions = await LiveSession.find({
+      batch: { $in: batchIds }
+    })
+    .populate('batch', 'name')
+    .populate('trainer', 'name')
+    .sort({ scheduledStartTime: 1 });
+    
+    // Convert to JSON to avoid mutation issues if any
+    const sessions = allSessions.map(s => s.toObject());
+
+    const now = new Date();
+    
+    // Logic: 
+    // Upcoming: Scheduled end time is in the future
+    // Past: Scheduled end time is in the past
+    
+    const upcoming = sessions.filter(s => new Date(s.scheduledEndTime) > now);
+    const past = sessions.filter(s => new Date(s.scheduledEndTime) <= now).reverse(); // Most recent past first
+    
+    res.json({
+      success: true,
+      count: sessions.length,
+      data: { upcoming, past }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};

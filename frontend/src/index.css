@@ -6,60 +6,60 @@
   :root {
     --background: 0 0% 100%;
     --foreground: 224 71.4% 4.1%;
-    
+
     --card: 0 0% 100%;
     --card-foreground: 224 71.4% 4.1%;
-    
+
     --popover: 0 0% 100%;
     --popover-foreground: 224 71.4% 4.1%;
-    
+
     --primary: 262 83% 58%;
     --primary-foreground: 210 20% 98%;
-    
+
     --secondary: 220 14.3% 95.9%;
     --secondary-foreground: 220.9 39.3% 11%;
-    
+
     --muted: 220 14.3% 95.9%;
     --muted-foreground: 220 8.9% 46.1%;
-    
+
     --accent: 220 14.3% 95.9%;
     --accent-foreground: 220.9 39.3% 11%;
-    
+
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 20% 98%;
-    
+
     --border: 220 13% 91%;
     --input: 220 13% 91%;
     --ring: 262 83% 58%;
-    
+
     --radius: 0.75rem;
   }
 
   .dark {
     --background: 240 10% 3.9%;
     --foreground: 0 0% 98%;
-    
+
     --card: 240 10% 7%;
     --card-foreground: 0 0% 98%;
-    
+
     --popover: 240 10% 3.9%;
     --popover-foreground: 0 0% 98%;
-    
+
     --primary: 263 70% 50%;
     --primary-foreground: 0 0% 98%;
-    
+
     --secondary: 240 3.7% 15.9%;
     --secondary-foreground: 0 0% 98%;
-    
+
     --muted: 240 3.7% 15.9%;
     --muted-foreground: 240 5% 64.9%;
-    
+
     --accent: 240 3.7% 15.9%;
     --accent-foreground: 0 0% 98%;
-    
+
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
-    
+
     --border: 240 3.7% 15.9%;
     --input: 240 3.7% 15.9%;
     --ring: 240 4.9% 83.9%;
@@ -72,7 +72,7 @@
   body {
     @apply bg-background text-foreground;
     /* Optional: Complex background pattern */
-    background-image: 
+    background-image:
       radial-gradient(circle at 50% 0%, hsla(var(--primary), 0.15) 0%, transparent 50%),
       radial-gradient(circle at 0% 0%, hsla(var(--primary), 0.05) 0%, transparent 30%);
     background-attachment: fixed;
@@ -83,20 +83,74 @@
   .glass {
     @apply bg-background/60 backdrop-blur-3xl border-border/50;
   }
-  
+
   .text-gradient {
     @apply bg-clip-text text-transparent bg-gradient-to-r from-primary to-purple-400;
   }
-  
+
   /* Adding animation utilities */
   .animate-gradient {
     background-size: 200%;
     animation: gradient 8s linear infinite;
   }
-  
+
   @keyframes gradient {
-    0% { background-position: 0% 50%; }
-    50% { background-position: 100% 50%; }
-    100% { background-position: 0% 50%; }
+    0% {
+      background-position: 0% 50%;
+    }
+
+    50% {
+      background-position: 100% 50%;
+    }
+
+    100% {
+      background-position: 0% 50%;
+    }
   }
+}
+
+/* Custom Plyr Theme - Dark Glass & Premium */
+:root {
+  --plyr-color-main: #e02424;
+  /* Rose-600 */
+}
+
+/* Hide YouTube branding as much as possible with CSS scaling hack (Optional if Modest Branding is enough) */
+.plyr__video-embed iframe {
+  top: -50%;
+  height: 200%;
+}
+
+/* Custom Controls Container */
+.plyr--video .plyr__controls {
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(10px);
+  margin: 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding-left: 20px;
+  padding-right: 20px;
+}
+
+/* Play Button */
+.plyr--full-ui.plyr--video .plyr__control--overlaid {
+  background: rgba(225, 29, 72, 0.9);
+  /* Rose-600 */
+  backdrop-filter: blur(4px);
+}
+
+.plyr--full-ui.plyr--video .plyr__control--overlaid:hover {
+  background: #be123c;
+  /* Rose-700 */
+}
+
+/* Progress Bar */
+.plyr__control input[type='range'] {
+  color: #f43f5e;
+}
+
+/* Hide specific YouTube elements if possible via pointer events (handled by Sandbox overlay primarily) */
+.plyr__poster {
+  background-size: cover;
+  background-position: center;
 }

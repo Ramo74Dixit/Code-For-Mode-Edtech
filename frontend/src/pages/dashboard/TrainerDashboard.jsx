@@ -3,11 +3,14 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../..
 import { Button } from '../../components/ui/button';
 import { 
     Users, BookOpen, DollarSign, Calendar, Plus, Video, FileText, 
-    TrendingUp, BarChart3, MoreHorizontal, Search 
+    TrendingUp, BarChart3, MoreHorizontal, Search, Sparkles, Trophy, Zap, Clock 
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
+import PageTransition from '../../components/ui/PageTransition';
+import SkeletonLoader from '../../components/ui/SkeletonLoader';
+import { motion } from 'framer-motion';
 
 // Modals
 import CreateBatchModal from '../../components/dashboard/trainer/CreateBatchModal';
@@ -18,7 +21,6 @@ import CreateAssignmentModal from '../../components/dashboard/trainer/CreateAssi
 const TrainerDashboard = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
-    const [activeTab, setActiveTab] = useState('overview');
     
     // Data State
     const [stats, setStats] = useState({
@@ -57,8 +59,7 @@ const TrainerDashboard = () => {
             setBatches(batchesData);
             setCourses(coursesData);
 
-            // Calculate Mock Revenue (since we don't track sales yet)
-            // Mock: 10 students per batch * batchPrice
+            // Mock Revenue Calculation
             const estimatedRevenue = batchesData.reduce((acc, b) => acc + (b.batchPrice * (b.currentEnrollment || 5)), 0);
 
             setStats({
@@ -77,7 +78,6 @@ const TrainerDashboard = () => {
         }
     };
 
-    // ... Event Handlers ...
     const handleBatchCreated = (newBatch) => {
         setBatches([...batches, newBatch]);
         setStats(prev => ({ ...prev, activeBatches: prev.activeBatches + 1 }));
@@ -91,187 +91,240 @@ const TrainerDashboard = () => {
     const handleSessionScheduled = () => {};
     const handleAssignmentCreated = () => {};
 
+    if (loading) {
+        return (
+            <div className="w-full space-y-8 p-8 min-h-screen bg-slate-950">
+                <div className="flex justify-between items-center mb-8">
+                     <SkeletonLoader type="text" className="w-64 h-12" />
+                     <div className="flex gap-2">
+                        <SkeletonLoader type="rectangular" className="w-32 h-10 rounded-lg" />
+                     </div>
+                </div>
+                <div className="grid gap-6 md:grid-cols-4">
+                    <SkeletonLoader type="card" count={4} className="h-40" />
+                </div>
+                <div className="grid gap-6 md:grid-cols-3 h-96">
+                     <div className="md:col-span-2"><SkeletonLoader type="card" className="h-full" /></div>
+                     <div><SkeletonLoader type="card" className="h-full" /></div>
+                </div>
+            </div>
+        );
+    }
 
     return (
-        <div className="flex flex-col min-h-screen bg-muted/10">
+        <PageTransition className="w-full min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-indigo-500/30">
+            {/* Ambient Glow */}
+            <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
+                <div className="absolute top-[-10%] right-[-5%] w-[40%] h-[40%] bg-emerald-900/10 rounded-full blur-[120px]" />
+                <div className="absolute bottom-[10%] left-[-10%] w-[40%] h-[40%] bg-indigo-900/10 rounded-full blur-[120px]" />
+            </div>
+
             {/* Top Bar / Header */}
-            <div className="border-b bg-background px-8 py-4 flex items-center justify-between sticky top-0 z-30">
+            <div className="border-b border-slate-800 bg-slate-950/80 backdrop-blur-md px-8 py-4 flex items-center justify-between sticky top-0 z-50">
                 <div>
-                    <h1 className="text-2xl font-bold flex items-center gap-2">
-                        <BarChart3 className="fill-primary text-primary" />
+                    <h1 className="text-2xl font-bold flex items-center gap-2 text-white">
+                        <BarChart3 className="text-emerald-500" />
                         Instructor Studio
                     </h1>
                 </div>
                 <div className="flex items-center gap-4">
-                    <Button onClick={() => setIsCourseModalOpen(true)} size="sm" variant="outline">
+                    <Button onClick={() => setIsCourseModalOpen(true)} size="sm" variant="outline" className="border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-300">
                         <Plus className="h-4 w-4 mr-2" /> New Course
                     </Button>
-                    <Button onClick={() => setIsBatchModalOpen(true)} size="sm">
+                    <Button onClick={() => setIsBatchModalOpen(true)} size="sm" className="bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/20">
                         <Plus className="h-4 w-4 mr-2" /> Create Batch
                     </Button>
                 </div>
             </div>
 
-            <div className="p-8 space-y-8 max-w-7xl mx-auto w-full">
+            <div className="relative z-10 p-8 space-y-8 max-w-7xl mx-auto w-full">
                 
                 {/* Stats Command Center */}
-                <div className="grid gap-4 md:grid-cols-4">
-                    <Card className="border-l-4 border-l-green-500 shadow-sm">
-                        <CardHeader className="flex flex-row items-center justify-between pb-2">
-                            <CardTitle className="text-sm font-medium text-muted-foreground">Total Revenue</CardTitle>
-                            <DollarSign className="h-4 w-4 text-green-500" />
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-bold">₹{stats.revenue.toLocaleString()}</div>
-                            <p className="text-xs text-muted-foreground mt-1">+20% from last month</p>
-                        </CardContent>
-                    </Card>
-                    <Card className="border-l-4 border-l-blue-500 shadow-sm">
-                        <CardHeader className="flex flex-row items-center justify-between pb-2">
-                            <CardTitle className="text-sm font-medium text-muted-foreground">Active Students</CardTitle>
-                            <Users className="h-4 w-4 text-blue-500" />
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-bold">{stats.totalStudents}</div>
-                            <p className="text-xs text-muted-foreground mt-1">Across {stats.activeBatches} batches</p>
-                        </CardContent>
-                    </Card>
-                    <Card className="border-l-4 border-l-purple-500 shadow-sm">
-                        <CardHeader className="flex flex-row items-center justify-between pb-2">
-                            <CardTitle className="text-sm font-medium text-muted-foreground">Courses</CardTitle>
-                            <BookOpen className="h-4 w-4 text-purple-500" />
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-bold">{stats.totalCourses}</div>
-                            <p className="text-xs text-muted-foreground mt-1">Published</p>
-                        </CardContent>
-                    </Card>
-                     <Card className="border-l-4 border-l-orange-500 shadow-sm cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setIsLiveModalOpen(true)}>
-                        <CardHeader className="flex flex-row items-center justify-between pb-2">
-                            <CardTitle className="text-sm font-medium text-muted-foreground">Go Live</CardTitle>
-                            <Video className="h-4 w-4 text-orange-500" />
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-sm font-medium text-orange-600">Schedule Now &rarr;</div>
-                        </CardContent>
-                    </Card>
+                <div className="grid gap-6 md:grid-cols-4">
+                    {[
+                        { title: 'Total Revenue', value: `₹${stats.revenue.toLocaleString()}`, icon: DollarSign, color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20', trend: '+20%' },
+                        { title: 'Active Students', value: stats.totalStudents, icon: Users, color: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/20', trend: `${stats.activeBatches} Batches` },
+                        { title: 'Published Courses', value: stats.totalCourses, icon: BookOpen, color: 'text-purple-400', bg: 'bg-purple-500/10', border: 'border-purple-500/20', trend: 'Content' },
+                        { title: 'Go Live', value: 'Webinar', icon: Video, color: 'text-orange-400', bg: 'bg-orange-500/10', border: 'border-orange-500/20', action: true }
+                    ].map((stat, i) => (
+                        <motion.div 
+                            key={i}
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: i * 0.1 }}
+                            onClick={stat.action ? () => setIsLiveModalOpen(true) : undefined}
+                            className={`
+                                relative overflow-hidden rounded-2xl p-6 border ${stat.border} bg-slate-900/50 backdrop-blur-sm
+                                hover:shadow-xl hover:shadow-black/20 transition-all duration-300 cursor-pointer
+                            `}
+                        >
+                             <div className={`absolute top-0 right-0 p-4`}>
+                                <div className={`p-2 rounded-lg ${stat.bg} ${stat.color}`}>
+                                    <stat.icon className="h-5 w-5" />
+                                </div>
+                            </div>
+                            <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">{stat.title}</p>
+                            <h3 className={`text-2xl font-bold text-white mb-2 ${stat.action && 'text-orange-400'}`}>{stat.value}</h3>
+                            {!stat.action ? (
+                                <div className="flex items-center gap-1 text-xs font-mono text-slate-500">
+                                    <TrendingUp className="h-3 w-3 text-emerald-500" />
+                                    <span>{stat.trend}</span>
+                                </div>
+                            ) : (
+                                <div className="text-xs font-bold text-orange-500 flex items-center gap-1">
+                                    Schedule Now <Plus className="h-3 w-3" />
+                                </div>
+                            )}
+                        </motion.div>
+                    ))}
                 </div>
 
                 {/* Main Content Area */}
                 <div className="grid gap-8 lg:grid-cols-3">
                     
-                     {/* Left: Batches Table (Takes 2 cols) */}
-                     <div className="lg:col-span-2 space-y-4">
+                     {/* Left: Batches Command Center (Takes 2 cols) */}
+                     <div className="lg:col-span-2 space-y-6">
                         <div className="flex items-center justify-between">
-                            <h2 className="text-xl font-bold">Active Batches</h2>
-                            <div className="relative w-64">
-                                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                                <input 
-                                    placeholder="Search batches..." 
-                                    className="w-full pl-8 h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                                />
+                            <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                                <Users className="h-5 w-5 text-indigo-400" />
+                                Active Batches
+                            </h2>
+                             <div className="flex gap-2">
+                                <Button variant="ghost" size="icon" className="text-slate-400 hover:text-white">
+                                    <Clock className="h-4 w-4" />
+                                </Button>
                             </div>
                         </div>
 
-                        <Card>
-                             <div className="relative w-full overflow-auto">
-                                <table className="w-full caption-bottom text-sm text-left">
-                                    <thead className="[&_tr]:border-b">
-                                        <tr className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted">
-                                            <th className="h-12 px-4 align-middle font-medium text-muted-foreground w-[40%]">Batch Name</th>
-                                            <th className="h-12 px-4 align-middle font-medium text-muted-foreground">Dates</th>
-                                            <th className="h-12 px-4 align-middle font-medium text-muted-foreground">Students</th>
-                                            <th className="h-12 px-4 align-middle font-medium text-muted-foreground">Status</th>
-                                            <th className="h-12 px-4 align-middle font-medium text-muted-foreground text-right">Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="[&_tr:last-child]:border-0">
-                                        {batches.length > 0 ? (
-                                            batches.map(batch => (
-                                                <tr key={batch._id} className="border-b transition-colors hover:bg-muted/50">
-                                                    <td className="p-4 align-middle font-medium">
-                                                        <div className="flex flex-col">
-                                                            <span>{batch.name}</span>
-                                                            <span className="text-xs text-muted-foreground font-normal">₹{batch.batchPrice}</span>
-                                                        </div>
-                                                    </td>
-                                                    <td className="p-4 align-middle text-xs">
-                                                        {new Date(batch.startDate).toLocaleDateString()}
-                                                    </td>
-                                                    <td className="p-4 align-middle">
-                                                       <div className="flex items-center gap-2">
-                                                            <Users className="h-3 w-3 text-muted-foreground" /> 
-                                                            {batch.currentEnrollment || 0}
-                                                       </div>
-                                                    </td>
-                                                    <td className="p-4 align-middle">
-                                                        <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-transparent bg-green-100 text-green-700 hover:bg-green-100/80">
-                                                            Active
-                                                        </span>
-                                                    </td>
-                                                    <td className="p-4 align-middle text-right">
-                                                         <Button variant="ghost" size="sm" onClick={() => navigate(`/batches/${batch._id}`)}>
-                                                            Manage
-                                                         </Button>
-                                                    </td>
-                                                </tr>
-                                            ))
-                                        ) : (
-                                            <tr>
-                                                <td colSpan={5} className="p-8 text-center text-muted-foreground">
-                                                    No batches found.
-                                                </td>
-                                            </tr>
-                                        )}
-                                    </tbody>
-                                </table>
-                             </div>
-                        </Card>
+                        {/* Trainer Command Cards */}
+                        <div className="space-y-4">
+                            {batches.length > 0 ? (
+                                batches.map((batch, idx) => (
+                                    <motion.div 
+                                        key={batch._id}
+                                        initial={{ opacity: 0, x: -20 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        transition={{ delay: idx * 0.1 }}
+                                        className="group relative bg-slate-900/40 backdrop-blur-md border border-slate-800 rounded-2xl p-5 overflow-hidden hover:bg-slate-900/60 hover:border-indigo-500/30 transition-all duration-300"
+                                    >
+                                        <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none group-hover:bg-indigo-500/10 transition-colors" />
+
+                                        <div className="flex flex-col sm:flex-row gap-6 relative z-10">
+                                            {/* Batch Info */}
+                                            <div className="flex-1 space-y-3">
+                                                <div className="flex justify-between items-start">
+                                                    <div>
+                                                        <h3 className="text-xl font-bold text-white group-hover:text-indigo-400 transition-colors">{batch.name}</h3>
+                                                        <p className="text-sm text-slate-400 flex items-center gap-2 mt-1">
+                                                            <BookOpen className="h-3 w-3" /> 
+                                                            {batch.course?.title}
+                                                        </p>
+                                                    </div>
+                                                    <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                                        Active
+                                                    </span>
+                                                </div>
+
+                                                <div className="flex gap-6 py-2">
+                                                    <div className="text-center">
+                                                        <p className="text-xs text-slate-500 uppercase tracking-wider">Students</p>
+                                                        <p className="text-lg font-bold text-white">{batch.currentEnrollment || 0}</p>
+                                                    </div>
+                                                    <div className="text-center">
+                                                        <p className="text-xs text-slate-500 uppercase tracking-wider">Classes</p>
+                                                        <p className="text-lg font-bold text-white">12<span className="text-slate-600 text-xs">/24</span></p>
+                                                    </div>
+                                                    <div className="text-center">
+                                                        <p className="text-xs text-slate-500 uppercase tracking-wider">Avg. Attd.</p>
+                                                        <p className="text-lg font-bold text-emerald-400">85%</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Actions & Next Session */}
+                                            <div className="w-full sm:w-48 flex flex-col justify-between gap-3 border-l border-slate-800/50 sm:pl-6">
+                                                <div className="space-y-1">
+                                                     <p className="text-xs text-indigo-400 font-medium flex items-center gap-1">
+                                                        <Clock className="h-3 w-3" /> Next Session
+                                                     </p>
+                                                     <p className="text-sm text-white font-medium">Today, 4:00 PM</p>
+                                                </div>
+                                                
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <Button size="sm" variant="outline" className="h-8 border-slate-700 bg-slate-800/50 text-slate-300 hover:text-white hover:bg-slate-700" onClick={() => navigate(`/batches/${batch._id}`)}>
+                                                        Manage
+                                                    </Button>
+                                                    <Button size="sm" className="h-8 bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/20">
+                                                        Join
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Progress Bar Visual */}
+                                        <div className="mt-4 w-full h-1 bg-slate-800 rounded-full overflow-hidden">
+                                            <div className="h-full bg-indigo-500 w-[50%]" />
+                                        </div>
+                                    </motion.div>
+                                ))
+                            ) : (
+                                <div className="text-center py-12 border border-dashed border-slate-800 rounded-2xl bg-slate-900/30">
+                                    <Sparkles className="h-8 w-8 text-slate-600 mx-auto mb-3" />
+                                    <p className="text-slate-500">No active batches. Start teaching today!</p>
+                                </div>
+                            )}
+                        </div>
                      </div>
 
                      {/* Right: Quick Stats / Courses (Takes 1 col) */}
                      <div className="space-y-6">
-                         <Card>
+                         <Card className="bg-slate-900/40 border-slate-800 backdrop-blur-sm">
                              <CardHeader>
-                                 <CardTitle className="text-lg">Your Courses</CardTitle>
-                                 <CardDescription>Top performing content</CardDescription>
+                                 <CardTitle className="text-lg text-white">Top Courses</CardTitle>
+                                 <CardDescription className="text-slate-500">Most enrolled content</CardDescription>
                              </CardHeader>
                              <CardContent className="space-y-4">
                                  {courses.slice(0, 5).map(course => (
-                                     <div key={course._id} className="flex items-center justify-between">
+                                     <div key={course._id} className="flex items-center justify-between group cursor-pointer hover:bg-slate-800/50 p-2 rounded-lg -mx-2 transition-colors">
                                          <div className="flex items-center gap-3">
-                                             <div className="h-10 w-10 rounded bg-muted overflow-hidden">
-                                                  {course.thumbnail && <img src={course.thumbnail} className="w-full h-full object-cover" alt="" />}
+                                             <div className="h-10 w-10 rounded-lg bg-slate-800 overflow-hidden border border-slate-700">
+                                                  {course.thumbnail ? (
+                                                      <img src={course.thumbnail} className="w-full h-full object-cover" alt="" />
+                                                  ) : (
+                                                      <div className="w-full h-full flex items-center justify-center text-slate-600 font-bold text-xs">IMG</div>
+                                                  )}
                                              </div>
                                              <div className="space-y-1">
-                                                 <p className="text-sm font-medium leading-none line-clamp-1 w-32">{course.title}</p>
-                                                 <p className="text-xs text-muted-foreground">₹{course.price}</p>
+                                                 <p className="text-sm font-medium text-white leading-none line-clamp-1 w-32 group-hover:text-indigo-400 transition-colors">{course.title}</p>
+                                                 <p className="text-xs text-slate-500">₹{course.price}</p>
                                              </div>
                                          </div>
-                                         <Button variant="ghost" size="icon" className="h-8 w-8">
+                                         <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-white">
                                              <MoreHorizontal className="h-4 w-4" />
                                          </Button>
                                      </div>
                                  ))}
-                                 {courses.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No courses yet.</p>}
+                                 {courses.length === 0 && <p className="text-sm text-slate-500 text-center py-4">No published courses.</p>}
                                  
-                                 <Button variant="outline" className="w-full" onClick={() => setIsCourseModalOpen(true)}>
-                                     View All Courses
+                                 <Button variant="outline" className="w-full border-slate-700 bg-transparent text-slate-300 hover:bg-slate-800" onClick={() => setIsCourseModalOpen(true)}>
+                                     View All Library
                                  </Button>
                              </CardContent>
                          </Card>
 
-                         <Card className="bg-primary/5 border-primary/20">
+                         <Card className="bg-gradient-to-b from-slate-900 to-slate-950 border-slate-800">
                              <CardHeader>
-                                 <CardTitle className="text-lg">Quick Tasks</CardTitle>
+                                 <CardTitle className="text-lg text-white flex items-center gap-2">
+                                     <Zap className="h-4 w-4 text-amber-500" /> Quick Actions
+                                 </CardTitle>
                              </CardHeader>
-                             <CardContent className="grid gap-2">
-                                 <Button variant="outline" className="justify-start bg-background" onClick={() => setIsAssignmentModalOpen(true)}>
-                                     <FileText className="mr-2 h-4 w-4" />
+                             <CardContent className="grid gap-3">
+                                 <Button variant="outline" className="justify-start bg-slate-800/50 border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white" onClick={() => setIsAssignmentModalOpen(true)}>
+                                     <FileText className="mr-2 h-4 w-4 text-emerald-500" />
                                      Create Assignment
                                  </Button>
-                                 <Button variant="outline" className="justify-start bg-background" onClick={() => setIsLiveModalOpen(true)}>
-                                     <Video className="mr-2 h-4 w-4" />
+                                 <Button variant="outline" className="justify-start bg-slate-800/50 border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white" onClick={() => setIsLiveModalOpen(true)}>
+                                     <Video className="mr-2 h-4 w-4 text-rose-500" />
                                      Schedule Webinar
                                  </Button>
                              </CardContent>
@@ -286,12 +339,12 @@ const TrainerDashboard = () => {
             <ScheduleLiveModal isOpen={isLiveModalOpen} onClose={() => setIsLiveModalOpen(false)} onSessionScheduled={handleSessionScheduled} />
             {isAssignmentModalOpen && (
                 <CreateAssignmentModal 
-                    batchId={/* TODO: Pass selected batch ID */ null} 
+                    batchId={null} 
                     onClose={() => setIsAssignmentModalOpen(false)} 
                     onSuccess={handleAssignmentCreated} 
                 />
             )}
-        </div>
+        </PageTransition>
     );
 };
 

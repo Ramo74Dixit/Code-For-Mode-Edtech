@@ -29,7 +29,7 @@ app.use('/api/batches', require('./routes/batches'));
 app.use('/api/live-sessions', require('./routes/liveStream'));
 app.use('/api/assignments', require('./routes/assignments'));
 app.use('/api/tests', require('./routes/tests'));
-app.use('/api/payments', require('./routes/paymentRoutes'));
+app.use('/api/payment', require('./routes/payment')); // Use 'payment.js' and singular '/api/payment' path
 app.use('/api/upload', require('./routes/uploadRoutes'));
 app.use('/api/admin', require('./routes/admin')); // Register Admin Routes
 app.use('/api', require('./routes/learningRoutes'));
@@ -91,7 +91,10 @@ io.on('connection', (socket) => {
        socket.to(data.room).emit('receive_message', populatedMessage);
        
     } catch (err) {
-       console.error("Error saving message:", err);
+       console.error("🔥 Error saving message:", err);
+       if (err.name === 'ValidationError') {
+           console.error("Validation Errors:", JSON.stringify(err.errors, null, 2));
+       }
     }
   });
 
@@ -100,7 +103,7 @@ io.on('connection', (socket) => {
   });
 });
 
-const PORT = process.env.PORT || 5001;
+const PORT = 5002; // Hardcoded to bypass stuck Port 5001
 
 server.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);

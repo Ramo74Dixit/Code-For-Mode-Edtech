@@ -3,7 +3,10 @@ const User = require('../models/User');
 
 exports.protect = async (req, res, next) => {
   let token;
-  console.log("AUTH HEADER =>", req.headers.authorization);
+  
+  console.log("🛡️ [Auth Middleware] Request Hit:", req.originalUrl);
+  console.log("🛡️ [Auth Middleware] Header:", req.headers.authorization);
+
   if (
     req.headers.authorization &&
     req.headers.authorization.startsWith('Bearer')
@@ -11,27 +14,31 @@ exports.protect = async (req, res, next) => {
     token = req.headers.authorization.split(' ')[1];
   }
 
-  // 1. Agar token nahi hai, to yahin rok dein (return lagana zaruri hai)
+  // 1. Agar token nahi hai
   if (!token) {
+    console.error("❌ [Auth Error] No Token Provided");
     return res.status(401).json({ success: false, message: 'Not authorized, no token' });
   }
 
   try {
     // 2. Token verify karein
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    console.log("✅ [Auth Success] Decoded:", decoded);
 
     // 3. User DB se nikalein
     req.user = await User.findById(decoded.id).select('-password');
-    console.log("DECODED =>", decoded);
 
-    // 4. SAFETY CHECK: Agar token sahi hai par user DB se delete ho chuka hai
+    // 4. SAFETY CHECK
     if (!req.user) {
+        console.error("❌ [Auth Error] User Not Found in DB:", decoded.id);
         return res.status(401).json({ success: false, message: 'User not found' });
     }
-    return next(); 
+    
+    console.log("👤 [Auth User] Authorized:", req.user.email);
+    next(); 
   } catch (error) {
-    console.error(error);
-    return res.status(401).json({ success: false, message: 'Not authorized, token failed' });
+    console.error("❌ [Auth Failed] Token Verification Error:", error.message);
+    return res.status(401).json({ success: false, message: 'Not authorized, token failed: ' + error.message });
   }
 };
 
