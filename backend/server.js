@@ -112,7 +112,8 @@ io.on('connection', (socket) => {
   });
 });
 
-const PORT = 5002; // Hardcoded to bypass stuck Port 5001
+// ✅ Naya code
+const PORT = process.env.PORT || 5002;
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`);
