@@ -13,6 +13,7 @@ import SkeletonLoader from '../../components/ui/SkeletonLoader';
 const CourseList = () => {
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
   const { isTrainer, isAdmin } = useAuth();
@@ -26,10 +27,12 @@ const CourseList = () => {
 
   const fetchCourses = async () => {
     try {
+      setError(null);
       const res = await api.get('/courses');
       setCourses(res.data.data);
     } catch (error) {
       console.error('Failed to fetch courses', error);
+      setError("Unable to load courses. Please check your connection.");
     } finally {
       setLoading(false);
     }
@@ -80,6 +83,17 @@ const CourseList = () => {
                </Button>
            )}
         </div>
+
+        {/* Error Message */}
+        {error && (
+            <div className="bg-red-500/10 border border-red-500/20 text-red-100 p-6 rounded-xl text-center">
+                <p className="text-lg font-bold mb-2">Connection Error</p>
+                <p className="text-red-300 mb-4">{error}</p>
+                <Button variant="outline" className="border-red-500/30 text-red-300 hover:bg-red-500/10" onClick={fetchCourses}>
+                    Retry Connection
+                </Button>
+            </div>
+        )}
 
         {/* Search & Filter Bar */}
         <div className="flex flex-col lg:flex-row gap-4 items-center">

@@ -28,6 +28,8 @@ app.use('/api/enrollments', require('./routes/enrollments'));
 app.use('/api/batches', require('./routes/batches'));
 app.use('/api/live-sessions', require('./routes/liveStream'));
 app.use('/api/assignments', require('./routes/assignments'));
+app.use('/api/announcements', require('./routes/announcements')); // Register Announcement Routes
+app.use('/api/ai', require('./routes/aiRoutes')); // Register AI Routes
 app.use('/api/tests', require('./routes/tests'));
 app.use('/api/payment', require('./routes/payment')); // Use 'payment.js' and singular '/api/payment' path
 app.use('/api/upload', require('./routes/uploadRoutes'));
@@ -37,6 +39,13 @@ app.use('/api/chat', require('./routes/chat')); // Register Chat Routes
 
 app.get('/api/health', (req, res) => {
   res.json({ success: true, message: 'Server is running!' });
+});
+
+// 404 Logger - catch unmatched routes (MUST BE LAST)
+app.use((req, res, next) => {
+    // Skip 404 log for internal or benign checks if needed, but for now log all
+    console.log(`⚠️ 404 NOT FOUND: [${req.method}] ${req.url}`);
+    res.status(404).json({ success: false, message: `Route not found: ${req.url}` });
 });
 
 app.use((err, req, res, next) => {
@@ -105,7 +114,7 @@ io.on('connection', (socket) => {
 
 const PORT = 5002; // Hardcoded to bypass stuck Port 5001
 
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
 });

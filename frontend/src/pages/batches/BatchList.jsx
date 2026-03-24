@@ -13,6 +13,7 @@ import { motion } from 'framer-motion';
 const BatchList = () => {
   const [batches, setBatches] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const { isTrainer, isAdmin } = useAuth();
   const navigate = useNavigate();
@@ -27,14 +28,15 @@ const BatchList = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
+      setError(null);
       const batchesRes = await api.get('/batches');
       
-      let finalBatches = batchesRes.data.data;
+      let finalBatches = batchesRes.data?.data || [];
       let enrollmentsMap = {};
 
       if (!isTrainer && !isAdmin) {
           const enrollRes = await api.get('/enrollments');
-          const enrollments = enrollRes.data.data || [];
+          const enrollments = enrollRes.data?.data || [];
           const validEnrollments = enrollments.filter(e => e && e.course);
           const enrolledCourseIds = validEnrollments.map(e => e.course._id?.toString());
           
@@ -53,6 +55,7 @@ const BatchList = () => {
       setBatches(finalBatches);
     } catch (error) {
       console.error('Failed to fetch data', error);
+      setError("Failed to load batches. Check your connection.");
     } finally {
       setLoading(false);
     }
@@ -135,6 +138,14 @@ const BatchList = () => {
                 onChange={(e) => setSearchTerm(e.target.value)}
              />
           </div>
+
+          {/* Error Disply */}
+          {error && (
+             <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl text-center">
+                 <p>{error}</p>
+                 <Button variant="link" onClick={fetchData} className="text-red-300 underline">Retry</Button>
+             </div>
+          )}
 
           {/* Batches Grid */}
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">

@@ -11,7 +11,9 @@ import {
   Menu,
   X,
   Shield,
-  MessageSquare
+  MessageSquare,
+  Bell,
+  Bot
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
@@ -45,6 +47,8 @@ const MainLayout = () => {
     { icon: Users, label: 'Batches', href: '/batches' },
     { icon: Video, label: 'Live Classes', href: '/live-classes' },
     { icon: MessageSquare, label: 'Community', href: '/community' },
+    { icon: Bell, label: 'Announcements', href: '/announcements' },
+    { icon: Bot, label: 'Interview Coach', href: '/interview' },
   ];
 
   if (user?.role === 'admin') {

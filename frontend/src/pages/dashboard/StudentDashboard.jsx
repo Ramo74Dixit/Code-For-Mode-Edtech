@@ -12,21 +12,25 @@ const StudentDashboard = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
     const [availableCourses, setAvailableCourses] = useState([]);
-    const [enrolledCourses, setEnrolledCourses] = useState([]);
+    const [enrolledCourses, setEnrolledCourses] = useState([]); // Stores full enrollment objects
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
 
     useEffect(() => {
         const fetchData = async () => {
             try {
+                setError(null);
                 // Fetch Available Courses
                 const coursesRes = await api.get('/courses');
-                setAvailableCourses(coursesRes.data.data);
+                setAvailableCourses(coursesRes.data?.data || []);
 
                 // Fetch Enrolled Courses
                 const enrollRes = await api.get('/enrollments');
-                setEnrolledCourses(enrollRes.data.data.map(enrollment => enrollment.course));
+                // Store the full enrollment object (contains .course and .batch)
+                setEnrolledCourses(enrollRes.data?.data || []);
             } catch (error) {
                 console.error("Failed to fetch data", error);
+                setError("Failed to load dashboard data. Please check your internet connection.");
             } finally {
                 setLoading(false);
             }
@@ -115,6 +119,20 @@ const StudentDashboard = () => {
                     </div>
                 </div>
                 
+                {/* Error Message */}
+                {error && (
+                    <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl text-center">
+                        <p>{error}</p>
+                        <Button 
+                            variant="link" 
+                            className="text-red-400 underline mt-2" 
+                            onClick={() => window.location.reload()}
+                        >
+                            Retry
+                        </Button>
+                    </div>
+                )}
+
                 {/* Stats Grid */}
                 <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                     {stats.map((stat, index) => (
@@ -160,37 +178,52 @@ const StudentDashboard = () => {
 
                         {parseInt(stats[0].value) > 0 ? (
                             <div className="grid sm:grid-cols-2 gap-4">
-                                {enrolledCourses.filter(Boolean).slice(0, 4).map(course => (
-                                    <div 
-                                        key={course._id} 
-                                        className="group bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden hover:border-indigo-500/50 transition-all cursor-pointer shadow-lg shadow-black/20"
-                                        onClick={() => navigate(`/batches`)} // Ideally should go to specific batch
-                                    >
-                                        <div className="aspect-video relative overflow-hidden">
-                                            {course.thumbnail ? (
-                                                <img src={course.thumbnail} alt={course.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                                            ) : (
-                                                <div className="w-full h-full flex items-center justify-center bg-slate-800">
-                                                    <BookOpen className="h-10 w-10 text-slate-600" />
+                                {enrolledCourses.slice(0, 4).map(enrollment => {
+                                    const course = enrollment.course;
+                                    const batch = enrollment.batch;
+                                    
+                                    if (!course) return null; // Skip if course data is missing
+
+                                    return (
+                                        <div 
+                                            key={enrollment._id} 
+                                            className="group bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden hover:border-indigo-500/50 transition-all cursor-pointer shadow-lg shadow-black/20"
+                                            onClick={() => navigate(`/batches`)} 
+                                        >
+                                            <div className="aspect-video relative overflow-hidden">
+                                                {course.thumbnail ? (
+                                                    <img src={course.thumbnail} alt={course.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                                                ) : (
+                                                    <div className="w-full h-full flex items-center justify-center bg-slate-800">
+                                                        <BookOpen className="h-10 w-10 text-slate-600" />
+                                                    </div>
+                                                )}
+                                                <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
+                                                <div className="absolute bottom-4 left-4 right-4">
+                                                    <span className="text-xs font-bold bg-indigo-500 text-white px-2 py-1 rounded-md mb-2 inline-block shadow-lg">ENROLLED</span>
+                                                    <h4 className="font-bold text-white line-clamp-1">{course.title}</h4>
+                                                    {batch && (
+                                                        <p className="text-xs text-indigo-300 mt-1 flex items-center gap-1">
+                                                            <Clock className="w-3 h-3" /> {batch.name}
+                                                        </p>
+                                                    )}
                                                 </div>
-                                            )}
-                                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
-                                            <div className="absolute bottom-4 left-4 right-4">
-                                                <span className="text-xs font-bold bg-indigo-500 text-white px-2 py-1 rounded-md mb-2 inline-block shadow-lg">ENROLLED</span>
-                                                <h4 className="font-bold text-white line-clamp-1">{course.title}</h4>
+                                            </div>
+                                            <div className="p-4">
+                                                 <div className="flex justify-between text-xs text-slate-400 mb-2">
+                                                     <span>Progress</span>
+                                                     <span>{enrollment.progress || 0}%</span>
+                                                 </div>
+                                                 <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                                                     <div 
+                                                        className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full" 
+                                                        style={{ width: `${enrollment.progress || 0}%` }}
+                                                     />
+                                                 </div>
                                             </div>
                                         </div>
-                                        <div className="p-4">
-                                             <div className="flex justify-between text-xs text-slate-400 mb-2">
-                                                 <span>Progress</span>
-                                                 <span>15%</span>
-                                             </div>
-                                             <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-                                                 <div className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 w-[15%] rounded-full" />
-                                             </div>
-                                        </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         ) : (
                             <div className="grid sm:grid-cols-2 gap-4">

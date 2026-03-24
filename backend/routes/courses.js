@@ -12,6 +12,7 @@ const { protect, authorize } = require('../middleware/auth');
 
 const router = express.Router();
 
+// Debug log removed
 router.get('/', getCourses);
 router.get('/trainer/my-courses', protect, authorize('trainer', 'admin'), getTrainerCourses);
 router.get('/:id', getCourse);

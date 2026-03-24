@@ -5,7 +5,14 @@ import { Input } from '../ui/input';
 import { Send, User } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
-const socket = io.connect("http://localhost:5001");
+// Use dynamic URL for mobile support, similar to api.js or BatchChat
+const getSocketUrl = () => {
+  if (import.meta.env.VITE_SOCKET_URL) return import.meta.env.VITE_SOCKET_URL;
+  const { hostname } = window.location;
+  return `http://${hostname}:5002`;
+};
+
+const socket = io.connect(getSocketUrl());
 
 const LiveChat = ({ roomId, title }) => {
     const { user } = useAuth();

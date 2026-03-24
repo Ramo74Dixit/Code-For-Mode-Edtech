@@ -1,7 +1,15 @@
 import axios from 'axios';
 
+// Dynamically determine the base URL for development to support access from other devices (e.g., mobile)
+const getBaseUrl = () => {
+  if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
+  const { hostname } = window.location;
+  // If running locally (localhost or IP), assume backend is on the same host at port 5002
+  return `http://${hostname}:5002/api`;
+};
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5002/api',
+  baseURL: getBaseUrl(),
   headers: {
     'Content-Type': 'application/json',
   },
