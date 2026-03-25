@@ -3,37 +3,74 @@ const TestSubmission = require('../models/TestSubmission');
 const Batch = require('../models/Batch');
 const axios = require('axios');
 
-// Helper to map languages to Piston versions
-const PISTON_RUNTIMES = {
-    'javascript': { language: 'javascript', version: '18.15.0' },
-    'python': { language: 'python', version: '3.10.0' },
-    'cpp': { language: 'cpp', version: '10.2.0' },
-    'java': { language: 'java', version: '15.0.2' }
+// Language config for multiple execution APIs
+const LANG_CONFIG = {
+    'javascript': { piston: { language: 'javascript', version: '18.15.0' }, codex: 'js', file: 'main.js' },
+    'python':     { piston: { language: 'python', version: '3.10.0' },     codex: 'py', file: 'main.py' },
+    'cpp':        { piston: { language: 'cpp', version: '10.2.0' },        codex: 'cpp', file: 'main.cpp' },
+    'java':       { piston: { language: 'java', version: '15.0.2' },       codex: 'java', file: 'Main.java' }
 };
+
+// Execute code using multiple fallback APIs
+const executeCode = async (language, sourceCode, input) => {
+    const config = LANG_CONFIG[language.toLowerCase()];
+    if (!config) throw new Error('Unsupported language');
+
+    // API 1: Try Piston
+    try {
+        const response = await axios.post('https://emkc.org/api/v2/piston/execute', {
+            language: config.piston.language,
+            version: config.piston.version,
+            files: [{ content: sourceCode }],
+            stdin: input || ""
+        }, { timeout: 10000 });
+        
+        const { run, compile } = response.data;
+        if (compile && compile.stderr) return { output: '', error: compile.stderr };
+        return { output: run.stdout || '', error: run.stderr || '' };
+    } catch (e) {
+        console.log('Piston failed, trying CodeX...', e.message);
+    }
+
+    // API 2: Try CodeX API (free, no auth)
+    try {
+        const response = await axios.post('https://api.codex.jaagrav.in', {
+            code: sourceCode,
+            language: config.codex,
+            input: input || ""
+        }, { timeout: 15000 });
+        
+        return {
+            output: response.data.output || '',
+            error: response.data.error || ''
+        };
+    } catch (e) {
+        console.log('CodeX also failed:', e.message);
+    }
+
+    throw new Error('All code execution services are currently unavailable. Please try again later.');
+};
+
+// ─── CRUD Operations ─────────────────────────────
 
 exports.createTest = async (req, res) => {
   try {
     const { title, description, batchId, questions, duration, startTime, endTime } = req.body;
     
-    // Validate Batch
     const batch = await Batch.findById(batchId);
     if (!batch) return res.status(404).json({ success: false, message: 'Batch not found' });
-    
-    // Check trainer permissions (assuming middleware handles basic role check, but double check ownership if needed)
-    // if (batch.trainer.toString() !== req.user.id) ... 
 
     const test = await Test.create({
       title,
       description,
       batch: batchId,
       creator: req.user.id,
-      questions, // Array of objects matching schema
+      questions,
       duration,
       startTime,
       endTime
     });
 
-    // Add Test to Batch
     await Batch.findByIdAndUpdate(batchId, {
       $push: { tests: test._id }
     });
@@ -60,7 +97,6 @@ exports.getTestById = async (req, res) => {
         const test = await Test.findById(req.params.id);
         if (!test) return res.status(404).json({ success: false, message: 'Test not found' });
 
-        // Check if user has already submitted
         const submission = await TestSubmission.findOne({
             test: req.params.id,
             student: req.user.id
@@ -70,7 +106,7 @@ exports.getTestById = async (req, res) => {
             success: true, 
             data: {
                 ...test.toObject(),
-                submission // Will be null if not submitted
+                submission
             } 
         });
     } catch (error) {
@@ -90,76 +126,38 @@ exports.getTestSubmissions = async (req, res) => {
     }
 };
 
-// Execute Code via Piston
+// ─── Code Execution ─────────────────────────────
+
 exports.runCode = async (req, res) => {
     try {
         const { language, sourceCode, input } = req.body;
         
-        const runtime = PISTON_RUNTIMES[language.toLowerCase()];
-        if (!runtime) {
+        if (!LANG_CONFIG[language.toLowerCase()]) {
             return res.status(400).json({ success: false, message: 'Unsupported language' });
         }
 
-        const payload = {
-            language: runtime.language,
-            version: runtime.version,
-            files: [
-                {
-                    content: sourceCode
-                }
-            ],
-            stdin: input || "",
-        };
-
-        const response = await axios.post('https://emkc.org/api/v2/piston/execute', payload, {
-            timeout: 15000 // 15 second timeout
-        });
-        
-        // Piston response structure: { run: { stdout: "...", stderr: "...", code: 0, ... } }
-        const { run } = response.data;
-
-        // Check if there's a compile error as well
-        const compile = response.data.compile;
-        if (compile && compile.stderr) {
-            return res.json({
-                success: true,
-                data: {
-                    output: '',
-                    error: compile.stderr,
-                    exitCode: compile.code
-                }
-            });
-        }
+        const result = await executeCode(language, sourceCode, input);
 
         res.json({
             success: true,
             data: {
-                output: run.stdout || '',
-                error: run.stderr || '',
-                exitCode: run.code
+                output: result.output,
+                error: result.error,
+                exitCode: result.error ? 1 : 0
             }
         });
 
     } catch (error) {
-        console.error("Piston Execution Error:", error.message);
-        
-        // More specific error messages
-        let message = 'Failed to execute code';
-        if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
-            message = 'Code execution timed out. Check for infinite loops.';
-        } else if (error.response) {
-            message = `Execution engine error (${error.response.status}): ${error.response.data?.message || 'Try again later'}`;
-        } else if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
-            message = 'Code execution service is temporarily unavailable. Please try again in a moment.';
-        }
-        
-        res.status(500).json({ success: false, message });
+        console.error("Code Execution Error:", error.message);
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 
+// ─── Test Submission (backend evaluates via API) ─────────────────
+
 exports.submitTest = async (req, res) => {
     try {
-        const { testId, submissions } = req.body; // submissions: [{ questionId, code, language }]
+        const { testId, submissions } = req.body;
         
         const test = await Test.findById(testId);
         if (!test) {
@@ -169,7 +167,6 @@ exports.submitTest = async (req, res) => {
         let totalScore = 0;
         const results = [];
 
-        // Iterate through each submitted question
         for (const sub of submissions) {
             const question = test.questions.id(sub.questionId);
             if (!question) continue;
@@ -177,34 +174,22 @@ exports.submitTest = async (req, res) => {
             let passedCases = 0;
             const testCaseResults = [];
 
-            // Run against ALL test cases (Hidden + Public)
             for (const tc of question.testCases) {
                 try {
-                    const runtime = PISTON_RUNTIMES[sub.language.toLowerCase()];
-                    if (!runtime) throw new Error('Unsupported language');
-
-                    const response = await axios.post('https://emkc.org/api/v2/piston/execute', {
-                        language: runtime.language,
-                        version: runtime.version,
-                        files: [{ content: sub.code }],
-                        stdin: tc.input
-                    });
-
-                    const { run } = response.data;
-                    const cleanOutput = run.stdout ? run.stdout.trim() : "";
-                    const cleanExpected = tc.output.trim();
+                    const result = await executeCode(sub.language, sub.code, tc.input || '');
+                    const cleanOutput = (result.output || '').trim();
+                    const cleanExpected = (tc.output || '').trim();
                     
-                    const isMatch = cleanOutput === cleanExpected;
+                    const isMatch = !result.error && cleanOutput === cleanExpected;
                     if (isMatch) passedCases++;
 
                     testCaseResults.push({
                         input: tc.isHidden ? 'Hidden' : tc.input,
-                        output: isMatch ? (tc.isHidden ? 'Hidden' : cleanOutput) : (tc.isHidden ? 'Hidden' : cleanOutput),
+                        output: tc.isHidden ? 'Hidden' : cleanOutput,
                         expected: tc.isHidden ? 'Hidden' : cleanExpected,
                         passed: isMatch,
                         isHidden: tc.isHidden
                     });
-
                 } catch (err) {
                     console.error(`Error running test case for Q ${question.problemTitle}:`, err.message);
                     testCaseResults.push({
@@ -216,8 +201,6 @@ exports.submitTest = async (req, res) => {
                 }
             }
 
-            // Calculate Score for this question
-            // Points awarded = (Passed Cases / Total Cases) * Question Points
             const questionScore = Math.round((passedCases / question.testCases.length) * question.points);
             totalScore += questionScore;
 
@@ -253,9 +236,8 @@ exports.submitTest = async (req, res) => {
     }
 };
 
-// @desc    Save pre-evaluated test results (from browser-based execution)
-// @route   POST /api/tests/submit-evaluated
-// @access  Private
+// ─── Pre-Evaluated Submission (browser-based execution) ─────────
+
 exports.submitEvaluated = async (req, res) => {
     try {
         const { testId, sectionSubmissions, totalScore } = req.body;
@@ -265,7 +247,6 @@ exports.submitEvaluated = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Test not found' });
         }
 
-        // Check for duplicate submission
         const existing = await TestSubmission.findOne({
             test: testId,
             student: req.user.id
