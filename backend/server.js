@@ -26,7 +26,7 @@ app.use('/api/courses', require('./routes/courses'));
 app.use('/api/enrollments', require('./routes/enrollments'));
 // Add after existing routes
 app.use('/api/batches', require('./routes/batches'));
-app.use('/api/live-sessions', require('./routes/liveStream'));
+app.use('/api/live-sessions', require('./routes/LiveStream'));
 app.use('/api/assignments', require('./routes/assignments'));
 app.use('/api/announcements', require('./routes/announcements')); // Register Announcement Routes
 app.use('/api/ai', require('./routes/aiRoutes')); // Register AI Routes
