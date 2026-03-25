@@ -110,6 +110,58 @@ const TestArena = () => {
         }));
     };
 
+    // Browser-based JavaScript execution (sandboxed)
+    const executeJavaScriptInBrowser = (code, input) => {
+        return new Promise((resolve) => {
+            const logs = [];
+            const timeout = 5000; // 5 second timeout
+            
+            try {
+                // Create sandboxed console
+                const sandboxConsole = {
+                    log: (...args) => logs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a, null, 2) : String(a)).join(' ')),
+                    error: (...args) => logs.push('[ERROR] ' + args.map(a => String(a)).join(' ')),
+                    warn: (...args) => logs.push('[WARN] ' + args.map(a => String(a)).join(' ')),
+                    info: (...args) => logs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a, null, 2) : String(a)).join(' ')),
+                };
+
+                // Wrap code in a function with sandboxed console and input
+                const wrappedCode = `
+                    const console = __sandboxConsole__;
+                    const input = __input__;
+                    const readline = () => input;
+                    ${code}
+                `;
+
+                const fn = new Function('__sandboxConsole__', '__input__', wrappedCode);
+                
+                // Execute with timeout
+                let finished = false;
+                const timer = setTimeout(() => {
+                    if (!finished) {
+                        finished = true;
+                        resolve({ output: '', error: 'Execution timed out (5s limit). Check for infinite loops.' });
+                    }
+                }, timeout);
+
+                fn(sandboxConsole, input);
+                finished = true;
+                clearTimeout(timer);
+
+                resolve({
+                    output: logs.join('\n') || '(No output — make sure you use console.log())',
+                    error: ''
+                });
+
+            } catch (err) {
+                resolve({
+                    output: '',
+                    error: `${err.name}: ${err.message}`
+                });
+            }
+        });
+    };
+
     const runCode = async () => {
         if (!currentQuestion) return;
         setIsRunning(true);
@@ -117,29 +169,40 @@ const TestArena = () => {
         setExecutionError(false);
         
         const currentAnswer = answers[currentQuestion._id];
+        const sampleInput = currentQuestion.testCases?.[0]?.input || "";
         
         try {
-            // Use the first test case input for "Run Code"
-            const sampleInput = currentQuestion.testCases?.[0]?.input || "";
-            
-            const res = await api.post('/tests/run', {
-                language: activeLanguage,
-                sourceCode: currentAnswer.code,
-                input: sampleInput
-            });
-            
-            const result = res.data.data;
-            if (result.error) {
-                setOutput(result.error);
-                setExecutionError(true);
+            if (activeLanguage === 'javascript') {
+                // Execute JavaScript directly in browser — instant, no API needed
+                const result = await executeJavaScriptInBrowser(currentAnswer.code, sampleInput);
+                
+                if (result.error) {
+                    setOutput(result.error);
+                    setExecutionError(true);
+                } else {
+                    setOutput(result.output);
+                }
             } else {
-                setOutput(result.output || '(No output)');
+                // For other languages, use backend API
+                const res = await api.post('/tests/run', {
+                    language: activeLanguage,
+                    sourceCode: currentAnswer.code,
+                    input: sampleInput
+                });
+                
+                const result = res.data.data;
+                if (result.error) {
+                    setOutput(result.error);
+                    setExecutionError(true);
+                } else {
+                    setOutput(result.output || '(No output)');
+                }
             }
 
         } catch (error) {
             console.error("Execution failed", error);
             const errorMsg = error.response?.data?.message || error.message || "Unknown error";
-            setOutput(`Execution failed: ${errorMsg}\n\nTip: Make sure your code prints output using console.log() for JavaScript or print() for Python.`);
+            setOutput(`Execution failed: ${errorMsg}\n\nTip: JavaScript runs directly in your browser. For Python/Java/C++, the execution service may be temporarily unavailable.`);
             setExecutionError(true);
         } finally {
             setIsRunning(false);
@@ -153,21 +216,76 @@ const TestArena = () => {
         }
         
         try {
-            // Transform answers to needed format
             const submissions = Object.keys(answers).map(qId => ({
                 questionId: qId,
                 code: answers[qId].code,
                 language: answers[qId].language
             }));
 
-            const res = await api.post('/tests/submit', {
-                testId: id,
-                submissions
-            });
+            // Check if all submissions are JavaScript — evaluate in browser
+            const allJS = submissions.every(s => s.language === 'javascript');
+            
+            if (allJS && test) {
+                // Evaluate all test cases in browser
+                let totalScore = 0;
+                const results = [];
 
-            console.log("Submission Response:", res.data);
-            setSubmissionResult(res.data.data);
-            clearInterval(timerRef.current);
+                for (const sub of submissions) {
+                    const question = test.questions.find(q => q._id === sub.questionId);
+                    if (!question) continue;
+
+                    let passedCases = 0;
+                    const testCaseResults = [];
+
+                    for (const tc of question.testCases) {
+                        const result = await executeJavaScriptInBrowser(sub.code, tc.input || '');
+                        const cleanOutput = (result.output || '').trim();
+                        const cleanExpected = (tc.output || '').trim();
+                        const isMatch = cleanOutput === cleanExpected;
+                        if (isMatch) passedCases++;
+
+                        testCaseResults.push({
+                            input: tc.isHidden ? 'Hidden' : tc.input,
+                            output: tc.isHidden ? 'Hidden' : cleanOutput,
+                            expected: tc.isHidden ? 'Hidden' : cleanExpected,
+                            passed: isMatch,
+                            isHidden: tc.isHidden
+                        });
+                    }
+
+                    const questionScore = Math.round((passedCases / question.testCases.length) * question.points);
+                    totalScore += questionScore;
+
+                    results.push({
+                        questionId: sub.questionId,
+                        code: sub.code,
+                        language: sub.language,
+                        passedCases,
+                        totalCases: question.testCases.length,
+                        score: questionScore,
+                        testCaseResults
+                    });
+                }
+
+                // Send pre-evaluated results to backend for storage
+                const res = await api.post('/tests/submit-evaluated', {
+                    testId: id,
+                    sectionSubmissions: results,
+                    totalScore
+                });
+
+                setSubmissionResult(res.data.data);
+                clearInterval(timerRef.current);
+            } else {
+                // For other languages, use backend evaluation (may fail if Piston is down)
+                const res = await api.post('/tests/submit', {
+                    testId: id,
+                    submissions
+                });
+
+                setSubmissionResult(res.data.data);
+                clearInterval(timerRef.current);
+            }
             
         } catch (error) {
             console.error(error);
