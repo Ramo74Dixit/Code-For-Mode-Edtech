@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import CodeEditor from '../../components/ide/CodeEditor';
@@ -19,6 +19,10 @@ const TestArena = () => {
     const [answers, setAnswers] = useState({}); // { questionId: { code: "...", language: "..." } }
     const [activeLanguage, setActiveLanguage] = useState('javascript');
     
+    // Timer State
+    const [timeLeft, setTimeLeft] = useState(0); // seconds
+    const timerRef = useRef(null);
+    
     // Execution State
     const [isRunning, setIsRunning] = useState(false);
     const [output, setOutput] = useState(null);
@@ -29,6 +33,10 @@ const TestArena = () => {
             try {
                 const res = await api.get(`/tests/${id}`);
                 setTest(res.data.data);
+                
+                // Initialize timer from test duration (minutes → seconds)
+                const durationMins = res.data.data.duration || 60;
+                setTimeLeft(durationMins * 60);
                 
                 // Initialize answers state
                 const initialAnswers = {};
@@ -48,6 +56,35 @@ const TestArena = () => {
         };
         fetchTest();
     }, [id]);
+
+    // Countdown Timer
+    useEffect(() => {
+        if (timeLeft <= 0 && test) {
+            // Time's up! Auto-submit
+            clearInterval(timerRef.current);
+            if (test && !submissionResult) {
+                alert("⏰ Time's up! Auto-submitting your test...");
+                submitTest();
+            }
+            return;
+        }
+        
+        timerRef.current = setInterval(() => {
+            setTimeLeft(prev => prev - 1);
+        }, 1000);
+        
+        return () => clearInterval(timerRef.current);
+    }, [timeLeft, test]);
+
+    // Format seconds to HH:MM:SS
+    const formatTime = (seconds) => {
+        const hrs = Math.floor(seconds / 3600);
+        const mins = Math.floor((seconds % 3600) / 60);
+        const secs = seconds % 60;
+        return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    };
+
+    const isTimeLow = timeLeft <= 300; // 5 minutes warning
 
     const currentQuestion = test?.questions[currentQuestionIndex];
 
@@ -96,20 +133,13 @@ const TestArena = () => {
                 setOutput(result.error);
                 setExecutionError(true);
             } else {
-                setOutput(result.output);
-                
-                // Basic validation against sample output if available
-                const expectedOutput = currentQuestion.testCases?.[0]?.output?.trim();
-                const actualOutput = result.output?.trim();
-                
-                if (expectedOutput && actualOutput === expectedOutput) {
-                    // Visual indicator logic could go here
-                }
+                setOutput(result.output || '(No output)');
             }
 
         } catch (error) {
             console.error("Execution failed", error);
-            setOutput("Execution failed: " + (error.response?.data?.message || error.message));
+            const errorMsg = error.response?.data?.message || error.message || "Unknown error";
+            setOutput(`Execution failed: ${errorMsg}\n\nTip: Make sure your code prints output using console.log() for JavaScript or print() for Python.`);
             setExecutionError(true);
         } finally {
             setIsRunning(false);
@@ -117,7 +147,10 @@ const TestArena = () => {
     };
 
     const submitTest = async () => {
-        if (!window.confirm("Are you sure you want to submit the test? You cannot undo this action.")) return;
+        // Only ask for confirm if manually submitting (not auto-submit on timeout)
+        if (timeLeft > 0) {
+            if (!window.confirm("Are you sure you want to submit the test? You cannot undo this action.")) return;
+        }
         
         try {
             // Transform answers to needed format
@@ -134,9 +167,7 @@ const TestArena = () => {
 
             console.log("Submission Response:", res.data);
             setSubmissionResult(res.data.data);
-            
-            // alert("Test Submitted Successfully!");
-            // navigate(-1); // Go back
+            clearInterval(timerRef.current);
             
         } catch (error) {
             console.error(error);
@@ -146,6 +177,48 @@ const TestArena = () => {
 
     if (loading) return <div className="h-screen flex items-center justify-center">Loading Test Environment...</div>;
     if (!test) return <div className="p-10 text-center">Test not found</div>;
+
+    // Show results if submitted
+    if (submissionResult) {
+        return (
+            <div className="min-h-screen bg-background flex items-center justify-center p-8">
+                <div className="max-w-2xl w-full space-y-6">
+                    <div className="text-center space-y-4">
+                        <CheckCircle className="h-16 w-16 text-emerald-500 mx-auto" />
+                        <h1 className="text-3xl font-bold">Test Submitted! 🎉</h1>
+                        <p className="text-muted-foreground">Your test has been evaluated.</p>
+                    </div>
+                    
+                    <Card className="bg-card border">
+                        <CardContent className="p-6 space-y-4">
+                            <div className="text-center">
+                                <span className="text-sm text-muted-foreground">Total Score</span>
+                                <div className="text-5xl font-bold text-primary mt-2">{submissionResult.totalScore}</div>
+                            </div>
+                            
+                            <div className="space-y-3 pt-4 border-t">
+                                {submissionResult.sectionSubmissions?.map((section, idx) => (
+                                    <div key={idx} className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
+                                        <span className="font-medium">Question {idx + 1}</span>
+                                        <div className="flex items-center gap-3">
+                                            <span className="text-sm text-muted-foreground">
+                                                {section.passedCases}/{section.totalCases} cases passed
+                                            </span>
+                                            <span className="font-bold text-primary">+{section.score}</span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </CardContent>
+                    </Card>
+                    
+                    <div className="text-center">
+                        <Button onClick={() => navigate(-1)}>← Back to Classroom</Button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="h-screen flex flex-col bg-background">
@@ -159,9 +232,13 @@ const TestArena = () => {
                 </div>
                 
                 <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2 text-sm font-mono bg-muted px-3 py-1 rounded">
+                    <div className={`flex items-center gap-2 text-sm font-mono px-3 py-1 rounded ${
+                        isTimeLow 
+                            ? 'bg-red-500/10 text-red-500 animate-pulse border border-red-500/30' 
+                            : 'bg-muted'
+                    }`}>
                         <Timer className="h-4 w-4" />
-                        <span>00:59:00</span>
+                        <span>{formatTime(timeLeft)}</span>
                     </div>
                     <Button variant="destructive" onClick={submitTest}>Submit Test</Button>
                 </div>
@@ -172,21 +249,21 @@ const TestArena = () => {
                 {/* Left: Problem Statement */}
                 <div className="w-1/3 border-r overflow-y-auto p-6 bg-card/50">
                     <h2 className="text-xl font-bold mb-4">{currentQuestion.problemTitle}</h2>
-                    <div className="prose dark:prose-invert max-w-none text-sm mb-8">
+                    <div className="prose dark:prose-invert max-w-none text-sm mb-8 whitespace-pre-wrap">
                         {currentQuestion.problemDescription}
                     </div>
 
                     <div className="space-y-4">
                         <h3 className="font-semibold text-sm">Sample Test Cases</h3>
-                        {currentQuestion.testCases?.slice(0, 2).map((tc, i) => (
+                        {currentQuestion.testCases?.filter(tc => !tc.isHidden).slice(0, 2).map((tc, i) => (
                             <div key={i} className="bg-muted/50 p-3 rounded-md text-sm font-mono space-y-2">
                                 <div>
                                     <span className="text-muted-foreground text-xs block mb-1">Input:</span>
-                                    <div className="bg-background border p-2 rounded">{tc.input}</div>
+                                    <div className="bg-background border p-2 rounded whitespace-pre-wrap">{tc.input}</div>
                                 </div>
                                 <div>
                                     <span className="text-muted-foreground text-xs block mb-1">Expected Output:</span>
-                                    <div className="bg-background border p-2 rounded">{tc.output}</div>
+                                    <div className="bg-background border p-2 rounded whitespace-pre-wrap">{tc.output}</div>
                                 </div>
                             </div>
                         ))}
