@@ -3,52 +3,63 @@ const TestSubmission = require('../models/TestSubmission');
 const Batch = require('../models/Batch');
 const axios = require('axios');
 
-// Language config for multiple execution APIs
-const LANG_CONFIG = {
-    'javascript': { piston: { language: 'javascript', version: '18.15.0' }, codex: 'js', file: 'main.js' },
-    'python':     { piston: { language: 'python', version: '3.10.0' },     codex: 'py', file: 'main.py' },
-    'cpp':        { piston: { language: 'cpp', version: '10.2.0' },        codex: 'cpp', file: 'main.cpp' },
-    'java':       { piston: { language: 'java', version: '15.0.2' },       codex: 'java', file: 'Main.java' }
+// Judge0 CE language IDs
+const JUDGE0_LANG_IDS = {
+    'javascript': 63,  // Node.js
+    'python': 71,      // Python 3
+    'java': 62,        // Java (OpenJDK)
+    'cpp': 54          // C++ (GCC)
 };
 
-// Execute code using multiple fallback APIs
+// Execute code using Judge0 CE (free, no auth required)
 const executeCode = async (language, sourceCode, input) => {
-    const config = LANG_CONFIG[language.toLowerCase()];
-    if (!config) throw new Error('Unsupported language');
+    const langId = JUDGE0_LANG_IDS[language.toLowerCase()];
+    if (!langId) throw new Error('Unsupported language');
 
-    // API 1: Try Piston
     try {
-        const response = await axios.post('https://emkc.org/api/v2/piston/execute', {
-            language: config.piston.language,
-            version: config.piston.version,
-            files: [{ content: sourceCode }],
-            stdin: input || ""
-        }, { timeout: 10000 });
-        
-        const { run, compile } = response.data;
-        if (compile && compile.stderr) return { output: '', error: compile.stderr };
-        return { output: run.stdout || '', error: run.stderr || '' };
-    } catch (e) {
-        console.log('Piston failed, trying CodeX...', e.message);
-    }
+        const response = await axios.post(
+            'https://ce.judge0.com/submissions?base64_encoded=false&wait=true',
+            {
+                language_id: langId,
+                source_code: sourceCode,
+                stdin: input || ""
+            },
+            {
+                headers: { 'Content-Type': 'application/json' },
+                timeout: 20000
+            }
+        );
 
-    // API 2: Try CodeX API (free, no auth)
-    try {
-        const response = await axios.post('https://api.codex.jaagrav.in', {
-            code: sourceCode,
-            language: config.codex,
-            input: input || ""
-        }, { timeout: 15000 });
-        
+        const data = response.data;
+
+        // Check for compile error
+        if (data.compile_output && data.status?.id !== 3) {
+            return { output: '', error: data.compile_output };
+        }
+
+        // Check for runtime error
+        if (data.stderr) {
+            return { output: data.stdout || '', error: data.stderr };
+        }
+
+        // Status 3 = Accepted, 5 = Time Limit Exceeded, 6 = Compilation Error, etc.
+        if (data.status?.id === 5) {
+            return { output: '', error: 'Time Limit Exceeded. Check for infinite loops.' };
+        }
+
+        if (data.status?.id === 6) {
+            return { output: '', error: data.compile_output || 'Compilation Error' };
+        }
+
         return {
-            output: response.data.output || '',
-            error: response.data.error || ''
+            output: data.stdout || '',
+            error: ''
         };
-    } catch (e) {
-        console.log('CodeX also failed:', e.message);
-    }
 
-    throw new Error('All code execution services are currently unavailable. Please try again later.');
+    } catch (error) {
+        console.error('Judge0 CE Error:', error.message);
+        throw new Error('Code execution service is temporarily unavailable. Please try again.');
+    }
 };
 
 // ─── CRUD Operations ─────────────────────────────
@@ -132,7 +143,7 @@ exports.runCode = async (req, res) => {
     try {
         const { language, sourceCode, input } = req.body;
         
-        if (!LANG_CONFIG[language.toLowerCase()]) {
+        if (!JUDGE0_LANG_IDS[language.toLowerCase()]) {
             return res.status(400).json({ success: false, message: 'Unsupported language' });
         }
 
@@ -153,7 +164,7 @@ exports.runCode = async (req, res) => {
     }
 };
 
-// ─── Test Submission (backend evaluates via API) ─────────────────
+// ─── Test Submission (backend evaluates via Judge0) ─────────
 
 exports.submitTest = async (req, res) => {
     try {
@@ -191,7 +202,7 @@ exports.submitTest = async (req, res) => {
                         isHidden: tc.isHidden
                     });
                 } catch (err) {
-                    console.error(`Error running test case for Q ${question.problemTitle}:`, err.message);
+                    console.error(`Error running test case:`, err.message);
                     testCaseResults.push({
                         input: tc.isHidden ? 'Hidden' : tc.input,
                         error: 'Execution Error',
@@ -236,7 +247,7 @@ exports.submitTest = async (req, res) => {
     }
 };
 
-// ─── Pre-Evaluated Submission (browser-based execution) ─────────
+// ─── Pre-Evaluated Submission (browser-based execution) ─────
 
 exports.submitEvaluated = async (req, res) => {
     try {
