@@ -31,20 +31,25 @@ const LiveSchedule = () => {
     };
 
     const handleJoin = (session) => {
-        if (activeTab === 'upcoming') {
-            window.open(session.youtubeLiveUrl, '_blank');
+        // Extract video ID and play in-app for both live and past sessions
+        let videoId = session.youtubeVideoId;
+        if (!videoId && session.recordingUrl) {
+            videoId = session.recordingUrl.split('v=')[1]?.split('&')[0] || session.recordingUrl.split('/').pop();
+        }
+        if (!videoId && session.youtubeLiveUrl) {
+            const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=|live\/)([^#&?]*).*/;
+            const match = session.youtubeLiveUrl.match(regExp);
+            videoId = (match && match[2].length === 11) ? match[2] : null;
+            if (!videoId) {
+                videoId = session.youtubeLiveUrl.split('v=')[1]?.split('&')[0] || session.youtubeLiveUrl.split('/').pop();
+            }
+        }
+        
+        if (videoId) {
+            setPlayingSession({ ...session, videoId });
         } else {
-             // For past sessions (recordings), open in-app player
-             // Extract ID if only URL is present
-             let videoId = session.youtubeVideoId;
-             if (!videoId && session.recordingUrl) {
-                 videoId = session.recordingUrl.split('v=')[1]?.split('&')[0] || session.recordingUrl.split('/').pop();
-             }
-             if (!videoId && session.youtubeLiveUrl) {
-                  videoId = session.youtubeLiveUrl.split('v=')[1]?.split('&')[0] || session.youtubeLiveUrl.split('/').pop();
-             }
-             
-             setPlayingSession({ ...session, videoId });
+            // Fallback only if can't extract video ID
+            window.open(session.youtubeLiveUrl, '_blank');
         }
     };
 

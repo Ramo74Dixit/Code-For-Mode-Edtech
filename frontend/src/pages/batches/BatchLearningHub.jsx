@@ -76,8 +76,15 @@ const BatchLearningHub = () => {
     }
   };
 
-  const handleJoinClass = (url) => {
-      window.open(url, '_blank');
+  const handleJoinClass = (session) => {
+      // Play live stream in-app instead of redirecting to YouTube
+      const videoId = getVideoId(session.youtubeLiveUrl);
+      if (videoId) {
+          setPlayingVideo({ ...session, youtubeId: videoId, isLiveSession: true });
+      } else {
+          // Fallback: if can't extract ID, open in new tab
+          window.open(session.youtubeLiveUrl, '_blank');
+      }
   };
 
   const getVideoId = (url) => {
@@ -256,7 +263,7 @@ const BatchLearningHub = () => {
                                                     <div className="text-sm font-medium text-slate-300">
                                                         ⏰ {new Date(session.scheduledStartTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                                                     </div>
-                                                    <Button size="sm" className="bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-600/20" onClick={() => handleJoinClass(session.youtubeLiveUrl)}>
+                                                    <Button size="sm" className="bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-600/20" onClick={() => handleJoinClass(session)}>
                                                         Join Now
                                                     </Button>
                                                 </div>
