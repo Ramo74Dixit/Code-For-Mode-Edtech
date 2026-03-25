@@ -39,6 +39,7 @@ exports.createCourse = async (req, res) => {
   try {
     if (!req.body) req.body = {};
     req.body.trainer = req.user.id;
+    req.body.isPublished = true; // Auto-publish on creation
     const course = await Course.create(req.body);
     res.status(201).json({ success: true, data: course });
   } catch (error) {

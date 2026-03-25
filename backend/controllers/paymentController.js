@@ -17,10 +17,10 @@ const razorpay = new Razorpay({
 // @access  Private
 exports.createOrder = async (req, res) => {
   try {
-    const { courseId } = req.body;
+    const { courseId, batchId } = req.body;
 
-    if (!courseId) {
-        return res.status(400).json({ success: false, message: 'Course ID is required' });
+    if (!courseId || !batchId) {
+        return res.status(400).json({ success: false, message: 'Course ID and Batch ID are required' });
     }
 
     const course = await Course.findById(courseId);
@@ -28,7 +28,13 @@ exports.createOrder = async (req, res) => {
         return res.status(404).json({ success: false, message: 'Course not found' });
     }
 
-    const amount = course.price;
+    const batch = await Batch.findById(batchId);
+    if (!batch) {
+        return res.status(404).json({ success: false, message: 'Batch not found' });
+    }
+
+    // Use batch price if set, otherwise fall back to course price
+    const amount = batch.batchPrice > 0 ? batch.batchPrice : course.price;
 
     const options = {
       amount: amount * 100, // Amount in paise
@@ -62,7 +68,8 @@ exports.verifyPayment = async (req, res) => {
       razorpay_order_id,
       razorpay_payment_id,
       razorpay_signature,
-      courseId
+      courseId,
+      batchId
     } = req.body;
 
     const body = razorpay_order_id + '|' + razorpay_payment_id;
@@ -76,35 +83,27 @@ exports.verifyPayment = async (req, res) => {
 
     if (isAuthentic) {
       // Payment Successful
+      const course = await Course.findById(courseId);
+      const batch = await Batch.findById(batchId);
       
+      if (!batch) {
+        return res.status(404).json({ success: false, message: 'Selected batch not found' });
+      }
+
+      const amount = batch.batchPrice > 0 ? batch.batchPrice : (course?.price || 0);
+
       // 1. Save Payment to DB
       await Payment.create({
         razorpay_order_id,
         razorpay_payment_id,
         razorpay_signature,
-        amount: 8000, 
+        amount: amount,
         user: req.user.id,
         course: courseId,
         status: 'success'
       });
 
-      // 2. Enroll User in Course 
-      // Find the latest active batch for this course
-      let batch = await Batch.findOne({ course: courseId }).sort('-createdAt');
-      
-      if (!batch) {
-          // If no batch exists, create a default "Self Paced" batch (Critical fallback)
-           const course = await Course.findById(courseId);
-           batch = await Batch.create({
-               title: `${course.title} - Self Paced`,
-               course: courseId,
-               trainer: course.trainer, // Assign to course trainer
-               startDate: new Date(),
-               students: []
-           });
-      }
-
-      // Check if already enrolled
+      // 2. Enroll User in selected Batch
       const existingEnrollment = await BatchEnrollment.findOne({ student: req.user.id, batch: batch._id });
       
       if (!existingEnrollment) {
@@ -114,18 +113,19 @@ exports.verifyPayment = async (req, res) => {
               course: courseId,
               enrollmentStatus: 'active',
               paymentStatus: 'paid',
-              paymentAmount: 8000 // Ideally fetch from course price
+              paymentAmount: amount
           });
           
           // Add student to batch.enrolledStudents array
           batch.enrolledStudents.push(req.user.id);
           const savedBatch = await batch.save();
-          console.log("Enrolled user in batch:", savedBatch.title);
+          console.log("Enrolled user in batch:", savedBatch.name);
       }
 
       res.json({
         success: true,
-        message: 'Payment verified and Enrolled successfully'
+        message: 'Payment verified and Enrolled successfully',
+        batchId: batch._id // Return batchId for frontend redirect
       });
     } else {
       res.status(400).json({
