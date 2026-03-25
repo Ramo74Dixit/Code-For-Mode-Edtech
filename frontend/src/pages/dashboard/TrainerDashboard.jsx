@@ -49,8 +49,8 @@ const TrainerDashboard = () => {
             const headers = { Authorization: `Bearer ${token}` };
 
             const [batchesRes, coursesRes] = await Promise.all([
-                axios.get('http://localhost:5001/api/batches/trainer/my-batches', { headers }),
-                axios.get('http://localhost:5001/api/courses/trainer/my-courses', { headers })
+                axios.get('https://code-for-mode-edtech.onrender.com/api/batches/trainer/my-batches', { headers }),
+                axios.get('https://code-for-mode-edtech.onrender.com/api/courses/trainer/my-courses', { headers })
             ]);
 
             const batchesData = batchesRes.data.data || [];

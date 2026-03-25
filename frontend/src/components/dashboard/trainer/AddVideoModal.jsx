@@ -48,7 +48,7 @@ const AddVideoModal = ({ isOpen, onClose, batchId, onVideoAdded }) => {
 
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.post(`http://localhost:5001/api/batches/${batchId}/videos`, payload, {
+            const response = await axios.post(`https://code-for-mode-edtech.onrender.com/api/batches/${batchId}/videos`, payload, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             

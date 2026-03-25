@@ -6,8 +6,8 @@ import { Send, MessageSquare, Video, Paperclip, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
 
-// Use env variable or default to localhost
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:5002";
+// Use env variable or default to production Render URL
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "https://code-for-mode-edtech.onrender.com";
 const socket = io.connect(SOCKET_URL);
 
 const BatchChat = ({ roomId, title }) => {

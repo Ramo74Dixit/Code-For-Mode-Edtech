@@ -38,7 +38,7 @@ const CreateBatchModal = ({ isOpen, onClose, onBatchCreated }) => {
     const fetchCourses = async () => {
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.get('http://localhost:5001/api/courses/trainer/my-courses', {
+            const response = await axios.get('https://code-for-mode-edtech.onrender.com/api/courses/trainer/my-courses', {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setCourses(response.data.data || []);
@@ -77,7 +77,7 @@ const CreateBatchModal = ({ isOpen, onClose, onBatchCreated }) => {
 
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.post('http://localhost:5001/api/batches', formData, {
+            const response = await axios.post('https://code-for-mode-edtech.onrender.com/api/batches', formData, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             

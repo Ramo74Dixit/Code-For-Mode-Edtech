@@ -4,8 +4,8 @@ import axios from 'axios';
 const getBaseUrl = () => {
   if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
   const { hostname } = window.location;
-  // If running locally (localhost or IP), assume backend is on the same host at port 5002
-  return `http://${hostname}:5002/api`;
+  // Fallback to production Render URL
+  return `https://code-for-mode-edtech.onrender.com/api`;
 };
 
 const api = axios.create({

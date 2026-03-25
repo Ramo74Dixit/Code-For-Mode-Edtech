@@ -53,7 +53,7 @@ const CreateCourseModal = ({ isOpen, onClose, onCourseCreated }) => {
 
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.post('http://localhost:5001/api/courses', cleanedData, {
+            const response = await axios.post('https://code-for-mode-edtech.onrender.com/api/courses', cleanedData, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             

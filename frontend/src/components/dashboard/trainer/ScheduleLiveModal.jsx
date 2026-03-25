@@ -27,7 +27,7 @@ const ScheduleLiveModal = ({ isOpen, onClose, onSessionScheduled }) => {
     const fetchBatches = async () => {
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.get('http://localhost:5001/api/batches/trainer/my-batches', {
+            const response = await axios.get('https://code-for-mode-edtech.onrender.com/api/batches/trainer/my-batches', {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setBatches(response.data.data);
@@ -63,7 +63,7 @@ const ScheduleLiveModal = ({ isOpen, onClose, onSessionScheduled }) => {
 
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.post('http://localhost:5001/api/live-sessions', payload, {
+            const response = await axios.post('https://code-for-mode-edtech.onrender.com/api/live-sessions', payload, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             
