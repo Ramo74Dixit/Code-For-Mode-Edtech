@@ -252,3 +252,45 @@ exports.submitTest = async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
+
+// @desc    Save pre-evaluated test results (from browser-based execution)
+// @route   POST /api/tests/submit-evaluated
+// @access  Private
+exports.submitEvaluated = async (req, res) => {
+    try {
+        const { testId, sectionSubmissions, totalScore } = req.body;
+        
+        const test = await Test.findById(testId);
+        if (!test) {
+            return res.status(404).json({ success: false, message: 'Test not found' });
+        }
+
+        // Check for duplicate submission
+        const existing = await TestSubmission.findOne({
+            test: testId,
+            student: req.user.id
+        });
+        if (existing) {
+            return res.status(400).json({ success: false, message: 'You have already submitted this test.' });
+        }
+
+        const submission = await TestSubmission.create({
+            test: testId,
+            student: req.user.id,
+            sectionSubmissions,
+            totalScore,
+            status: 'submitted',
+            submittedAt: new Date()
+        });
+        
+        res.json({ 
+            success: true, 
+            message: 'Test submitted successfully', 
+            data: submission 
+        });
+
+    } catch (error) {
+        console.error("Submit Evaluated Error:", error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
