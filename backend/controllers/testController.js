@@ -111,23 +111,49 @@ exports.runCode = async (req, res) => {
             stdin: input || "",
         };
 
-        const response = await axios.post('https://emkc.org/api/v2/piston/execute', payload);
+        const response = await axios.post('https://emkc.org/api/v2/piston/execute', payload, {
+            timeout: 15000 // 15 second timeout
+        });
         
         // Piston response structure: { run: { stdout: "...", stderr: "...", code: 0, ... } }
         const { run } = response.data;
 
+        // Check if there's a compile error as well
+        const compile = response.data.compile;
+        if (compile && compile.stderr) {
+            return res.json({
+                success: true,
+                data: {
+                    output: '',
+                    error: compile.stderr,
+                    exitCode: compile.code
+                }
+            });
+        }
+
         res.json({
             success: true,
             data: {
-                output: run.stdout,
-                error: run.stderr,
+                output: run.stdout || '',
+                error: run.stderr || '',
                 exitCode: run.code
             }
         });
 
     } catch (error) {
         console.error("Piston Execution Error:", error.message);
-        res.status(500).json({ success: false, message: 'Failed to execute code' });
+        
+        // More specific error messages
+        let message = 'Failed to execute code';
+        if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+            message = 'Code execution timed out. Check for infinite loops.';
+        } else if (error.response) {
+            message = `Execution engine error (${error.response.status}): ${error.response.data?.message || 'Try again later'}`;
+        } else if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
+            message = 'Code execution service is temporarily unavailable. Please try again in a moment.';
+        }
+        
+        res.status(500).json({ success: false, message });
     }
 };
 
