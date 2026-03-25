@@ -4,7 +4,7 @@ import api from '../../services/api';
 import CodeEditor from '../../components/ide/CodeEditor';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
-import { Loader2, Play, CheckCircle, AlertCircle, ChevronLeft, ChevronRight, Timer } from 'lucide-react';
+import { Loader2, Play, CheckCircle, XCircle, ChevronLeft, ChevronRight, Timer, ArrowRight, Trophy, Send } from 'lucide-react';
 
 const TestArena = () => {
     const { id } = useParams();
@@ -16,17 +16,19 @@ const TestArena = () => {
     
     // Test State
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-    const [answers, setAnswers] = useState({}); // { questionId: { code: "...", language: "..." } }
+    const [answers, setAnswers] = useState({});
     const [activeLanguage, setActiveLanguage] = useState('javascript');
     
     // Timer State
-    const [timeLeft, setTimeLeft] = useState(0); // seconds
+    const [timeLeft, setTimeLeft] = useState(0);
     const timerRef = useRef(null);
     
-    // Execution State
+    // Execution & Test Case State
     const [isRunning, setIsRunning] = useState(false);
-    const [output, setOutput] = useState(null);
-    const [executionError, setExecutionError] = useState(false);
+    const [testCaseResults, setTestCaseResults] = useState({}); // { questionId: [{ passed, input, output, expected }] }
+    const [questionScores, setQuestionScores] = useState({}); // { questionId: score }
+    const [allPassed, setAllPassed] = useState(false); // Whether current question's all test cases passed
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     useEffect(() => {
         const fetchTest = async () => {
@@ -34,11 +36,9 @@ const TestArena = () => {
                 const res = await api.get(`/tests/${id}`);
                 setTest(res.data.data);
                 
-                // Initialize timer from test duration (minutes → seconds)
                 const durationMins = res.data.data.duration || 60;
                 setTimeLeft(durationMins * 60);
                 
-                // Initialize answers state
                 const initialAnswers = {};
                 res.data.data.questions.forEach(q => {
                     initialAnswers[q._id] = {
@@ -60,11 +60,10 @@ const TestArena = () => {
     // Countdown Timer
     useEffect(() => {
         if (timeLeft <= 0 && test) {
-            // Time's up! Auto-submit
             clearInterval(timerRef.current);
             if (test && !submissionResult) {
                 alert("⏰ Time's up! Auto-submitting your test...");
-                submitTest();
+                handleFinalSubmit(true);
             }
             return;
         }
@@ -76,26 +75,34 @@ const TestArena = () => {
         return () => clearInterval(timerRef.current);
     }, [timeLeft, test]);
 
-    // Format seconds to HH:MM:SS
     const formatTime = (seconds) => {
+        if (seconds < 0) seconds = 0;
         const hrs = Math.floor(seconds / 3600);
         const mins = Math.floor((seconds % 3600) / 60);
         const secs = seconds % 60;
         return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     };
 
-    const isTimeLow = timeLeft <= 300; // 5 minutes warning
-
+    const isTimeLow = timeLeft <= 300;
     const currentQuestion = test?.questions[currentQuestionIndex];
+    const currentResults = currentQuestion ? testCaseResults[currentQuestion._id] : null;
+    const totalScore = Object.values(questionScores).reduce((sum, s) => sum + s, 0);
+    const solvedCount = Object.values(questionScores).filter(s => s > 0).length;
 
     const handleCodeChange = (value) => {
         setAnswers(prev => ({
             ...prev,
-            [currentQuestion._id]: {
-                ...prev[currentQuestion._id],
-                code: value
-            }
+            [currentQuestion._id]: { ...prev[currentQuestion._id], code: value }
         }));
+        // Reset test case results when code changes
+        if (currentResults) {
+            setTestCaseResults(prev => {
+                const next = { ...prev };
+                delete next[currentQuestion._id];
+                return next;
+            });
+            setAllPassed(false);
+        }
     };
 
     const handleLanguageChange = (e) => {
@@ -103,297 +110,331 @@ const TestArena = () => {
         setActiveLanguage(lang);
         setAnswers(prev => ({
             ...prev,
-            [currentQuestion._id]: {
-                ...prev[currentQuestion._id],
-                language: lang
-            }
+            [currentQuestion._id]: { ...prev[currentQuestion._id], language: lang }
         }));
     };
 
     // Browser-based JavaScript execution (sandboxed)
-    const executeJavaScriptInBrowser = (code, input) => {
+    const executeJS = (code, input) => {
         return new Promise((resolve) => {
             const logs = [];
-            const timeout = 5000; // 5 second timeout
-            
             try {
-                // Create sandboxed console
                 const sandboxConsole = {
                     log: (...args) => logs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a, null, 2) : String(a)).join(' ')),
-                    error: (...args) => logs.push('[ERROR] ' + args.map(a => String(a)).join(' ')),
-                    warn: (...args) => logs.push('[WARN] ' + args.map(a => String(a)).join(' ')),
+                    error: (...args) => logs.push(args.map(a => String(a)).join(' ')),
+                    warn: (...args) => logs.push(args.map(a => String(a)).join(' ')),
                     info: (...args) => logs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a, null, 2) : String(a)).join(' ')),
                 };
 
-                // Wrap code in a function with sandboxed console and input
                 const wrappedCode = `
-                    const console = __sandboxConsole__;
-                    const input = __input__;
+                    const console = __sc__;
+                    const input = __inp__;
                     const readline = () => input;
                     ${code}
                 `;
 
-                const fn = new Function('__sandboxConsole__', '__input__', wrappedCode);
+                const fn = new Function('__sc__', '__inp__', wrappedCode);
                 
-                // Execute with timeout
                 let finished = false;
                 const timer = setTimeout(() => {
-                    if (!finished) {
-                        finished = true;
-                        resolve({ output: '', error: 'Execution timed out (5s limit). Check for infinite loops.' });
-                    }
-                }, timeout);
+                    if (!finished) { finished = true; resolve({ output: '', error: 'Execution timed out (5s). Check for infinite loops.' }); }
+                }, 5000);
 
                 fn(sandboxConsole, input);
                 finished = true;
                 clearTimeout(timer);
 
-                resolve({
-                    output: logs.join('\n') || '(No output — make sure you use console.log())',
-                    error: ''
-                });
-
+                resolve({ output: logs.join('\n'), error: '' });
             } catch (err) {
-                resolve({
-                    output: '',
-                    error: `${err.name}: ${err.message}`
-                });
+                resolve({ output: '', error: `${err.name}: ${err.message}` });
             }
         });
     };
 
+    // Run code against ALL test cases for current question
     const runCode = async () => {
         if (!currentQuestion) return;
         setIsRunning(true);
-        setOutput(null);
-        setExecutionError(false);
+        setAllPassed(false);
         
         const currentAnswer = answers[currentQuestion._id];
-        const sampleInput = currentQuestion.testCases?.[0]?.input || "";
-        
+        const results = [];
+        let passed = 0;
+
         try {
-            if (activeLanguage === 'javascript') {
-                // Execute JavaScript directly in browser — instant, no API needed
-                const result = await executeJavaScriptInBrowser(currentAnswer.code, sampleInput);
-                
-                if (result.error) {
-                    setOutput(result.error);
-                    setExecutionError(true);
+            for (const tc of currentQuestion.testCases) {
+                if (activeLanguage === 'javascript') {
+                    const result = await executeJS(currentAnswer.code, tc.input || '');
+                    const actualOutput = (result.output || '').trim();
+                    const expectedOutput = (tc.output || '').trim();
+                    const isMatch = !result.error && actualOutput === expectedOutput;
+                    if (isMatch) passed++;
+
+                    results.push({
+                        input: tc.isHidden ? 'Hidden' : tc.input,
+                        output: result.error ? `Error: ${result.error}` : (tc.isHidden ? 'Hidden' : actualOutput),
+                        expected: tc.isHidden ? 'Hidden' : expectedOutput,
+                        passed: isMatch,
+                        isHidden: tc.isHidden
+                    });
                 } else {
-                    setOutput(result.output);
-                }
-            } else {
-                // For other languages, use backend API
-                const res = await api.post('/tests/run', {
-                    language: activeLanguage,
-                    sourceCode: currentAnswer.code,
-                    input: sampleInput
-                });
-                
-                const result = res.data.data;
-                if (result.error) {
-                    setOutput(result.error);
-                    setExecutionError(true);
-                } else {
-                    setOutput(result.output || '(No output)');
+                    // Backend API fallback for other languages
+                    try {
+                        const res = await api.post('/tests/run', {
+                            language: activeLanguage,
+                            sourceCode: currentAnswer.code,
+                            input: tc.input || ''
+                        });
+                        const r = res.data.data;
+                        const actualOutput = (r.output || '').trim();
+                        const expectedOutput = (tc.output || '').trim();
+                        const isMatch = !r.error && actualOutput === expectedOutput;
+                        if (isMatch) passed++;
+
+                        results.push({
+                            input: tc.isHidden ? 'Hidden' : tc.input,
+                            output: r.error ? `Error: ${r.error}` : (tc.isHidden ? 'Hidden' : actualOutput),
+                            expected: tc.isHidden ? 'Hidden' : expectedOutput,
+                            passed: isMatch,
+                            isHidden: tc.isHidden
+                        });
+                    } catch (err) {
+                        results.push({
+                            input: tc.isHidden ? 'Hidden' : tc.input,
+                            output: 'Execution service unavailable',
+                            expected: tc.isHidden ? 'Hidden' : tc.output,
+                            passed: false,
+                            isHidden: tc.isHidden
+                        });
+                    }
                 }
             }
 
+            // Save results
+            setTestCaseResults(prev => ({ ...prev, [currentQuestion._id]: results }));
+
+            // Calculate score for this question
+            const score = Math.round((passed / currentQuestion.testCases.length) * currentQuestion.points);
+            setQuestionScores(prev => ({ ...prev, [currentQuestion._id]: score }));
+
+            // Check if all passed
+            const allMatch = passed === currentQuestion.testCases.length;
+            setAllPassed(allMatch);
+
         } catch (error) {
             console.error("Execution failed", error);
-            const errorMsg = error.response?.data?.message || error.message || "Unknown error";
-            setOutput(`Execution failed: ${errorMsg}\n\nTip: JavaScript runs directly in your browser. For Python/Java/C++, the execution service may be temporarily unavailable.`);
-            setExecutionError(true);
         } finally {
             setIsRunning(false);
         }
     };
 
-    const submitTest = async () => {
-        // Only ask for confirm if manually submitting (not auto-submit on timeout)
-        if (timeLeft > 0) {
-            if (!window.confirm("Are you sure you want to submit the test? You cannot undo this action.")) return;
+    const goToNextQuestion = () => {
+        if (currentQuestionIndex < test.questions.length - 1) {
+            setCurrentQuestionIndex(prev => prev + 1);
+            setAllPassed(false);
         }
+    };
+
+    // Final submit
+    const handleFinalSubmit = async (forced = false) => {
+        if (!forced && !window.confirm("Are you sure you want to submit the test?")) return;
+        setIsSubmitting(true);
         
         try {
-            const submissions = Object.keys(answers).map(qId => ({
-                questionId: qId,
-                code: answers[qId].code,
-                language: answers[qId].language
-            }));
+            // Evaluate any un-evaluated questions
+            let finalTotalScore = 0;
+            const allResults = [];
 
-            // Check if all submissions are JavaScript — evaluate in browser
-            const allJS = submissions.every(s => s.language === 'javascript');
-            
-            if (allJS && test) {
-                // Evaluate all test cases in browser
-                let totalScore = 0;
-                const results = [];
+            for (const q of test.questions) {
+                const answer = answers[q._id];
+                let results = testCaseResults[q._id];
 
-                for (const sub of submissions) {
-                    const question = test.questions.find(q => q._id === sub.questionId);
-                    if (!question) continue;
-
-                    let passedCases = 0;
-                    const testCaseResults = [];
-
-                    for (const tc of question.testCases) {
-                        const result = await executeJavaScriptInBrowser(sub.code, tc.input || '');
-                        const cleanOutput = (result.output || '').trim();
-                        const cleanExpected = (tc.output || '').trim();
-                        const isMatch = cleanOutput === cleanExpected;
-                        if (isMatch) passedCases++;
-
-                        testCaseResults.push({
-                            input: tc.isHidden ? 'Hidden' : tc.input,
-                            output: tc.isHidden ? 'Hidden' : cleanOutput,
-                            expected: tc.isHidden ? 'Hidden' : cleanExpected,
-                            passed: isMatch,
-                            isHidden: tc.isHidden
-                        });
+                // If this question wasn't run yet, evaluate now
+                if (!results && answer.language === 'javascript') {
+                    results = [];
+                    let pc = 0;
+                    for (const tc of q.testCases) {
+                        const result = await executeJS(answer.code, tc.input || '');
+                        const actual = (result.output || '').trim();
+                        const expected = (tc.output || '').trim();
+                        const isMatch = !result.error && actual === expected;
+                        if (isMatch) pc++;
+                        results.push({ input: tc.isHidden ? 'Hidden' : tc.input, output: tc.isHidden ? 'Hidden' : actual, expected: tc.isHidden ? 'Hidden' : expected, passed: isMatch, isHidden: tc.isHidden });
                     }
-
-                    const questionScore = Math.round((passedCases / question.testCases.length) * question.points);
-                    totalScore += questionScore;
-
-                    results.push({
-                        questionId: sub.questionId,
-                        code: sub.code,
-                        language: sub.language,
-                        passedCases,
-                        totalCases: question.testCases.length,
-                        score: questionScore,
-                        testCaseResults
-                    });
+                    const score = Math.round((pc / q.testCases.length) * q.points);
+                    finalTotalScore += score;
+                    allResults.push({ questionId: q._id, code: answer.code, language: answer.language, passedCases: pc, totalCases: q.testCases.length, score, testCaseResults: results });
+                } else if (results) {
+                    const pc = results.filter(r => r.passed).length;
+                    const score = questionScores[q._id] || 0;
+                    finalTotalScore += score;
+                    allResults.push({ questionId: q._id, code: answer.code, language: answer.language, passedCases: pc, totalCases: q.testCases.length, score, testCaseResults: results });
+                } else {
+                    // Non-JS, not yet evaluated — send with 0 score
+                    allResults.push({ questionId: q._id, code: answer.code, language: answer.language, passedCases: 0, totalCases: q.testCases.length, score: 0, testCaseResults: [] });
                 }
-
-                // Send pre-evaluated results to backend for storage
-                const res = await api.post('/tests/submit-evaluated', {
-                    testId: id,
-                    sectionSubmissions: results,
-                    totalScore
-                });
-
-                setSubmissionResult(res.data.data);
-                clearInterval(timerRef.current);
-            } else {
-                // For other languages, use backend evaluation (may fail if Piston is down)
-                const res = await api.post('/tests/submit', {
-                    testId: id,
-                    submissions
-                });
-
-                setSubmissionResult(res.data.data);
-                clearInterval(timerRef.current);
             }
+
+            const res = await api.post('/tests/submit-evaluated', {
+                testId: id,
+                sectionSubmissions: allResults,
+                totalScore: finalTotalScore
+            });
+
+            setSubmissionResult(res.data.data);
+            clearInterval(timerRef.current);
             
         } catch (error) {
             console.error(error);
             alert("Submission failed: " + (error.response?.data?.message || error.message));
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
-    if (loading) return <div className="h-screen flex items-center justify-center">Loading Test Environment...</div>;
-    if (!test) return <div className="p-10 text-center">Test not found</div>;
+    if (loading) return (
+        <div className="h-screen flex items-center justify-center bg-slate-950 text-white">
+            <Loader2 className="h-8 w-8 animate-spin text-indigo-500 mr-3" /> Loading Test...
+        </div>
+    );
+    if (!test) return <div className="h-screen flex items-center justify-center bg-slate-950 text-white">Test not found</div>;
 
-    // Show results if submitted
+    // ─── Results Screen ─────────────────────────
     if (submissionResult) {
+        const maxPossible = test.questions.reduce((sum, q) => sum + q.points, 0);
+        const pct = maxPossible > 0 ? Math.round((submissionResult.totalScore / maxPossible) * 100) : 0;
+        
         return (
-            <div className="min-h-screen bg-background flex items-center justify-center p-8">
-                <div className="max-w-2xl w-full space-y-6">
+            <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-8">
+                <div className="max-w-2xl w-full space-y-8">
                     <div className="text-center space-y-4">
-                        <CheckCircle className="h-16 w-16 text-emerald-500 mx-auto" />
-                        <h1 className="text-3xl font-bold">Test Submitted! 🎉</h1>
-                        <p className="text-muted-foreground">Your test has been evaluated.</p>
+                        <div className={`h-20 w-20 mx-auto rounded-full flex items-center justify-center ${pct >= 70 ? 'bg-emerald-500/20' : pct >= 40 ? 'bg-amber-500/20' : 'bg-red-500/20'}`}>
+                            <Trophy className={`h-10 w-10 ${pct >= 70 ? 'text-emerald-400' : pct >= 40 ? 'text-amber-400' : 'text-red-400'}`} />
+                        </div>
+                        <h1 className="text-3xl font-bold">Test Complete!</h1>
+                        <p className="text-slate-400">
+                            {pct >= 70 ? 'Great job! 🎉' : pct >= 40 ? 'Good effort! Keep practicing. 💪' : 'Don\'t give up! Review and try again. 📚'}
+                        </p>
                     </div>
                     
-                    <Card className="bg-card border">
-                        <CardContent className="p-6 space-y-4">
-                            <div className="text-center">
-                                <span className="text-sm text-muted-foreground">Total Score</span>
-                                <div className="text-5xl font-bold text-primary mt-2">{submissionResult.totalScore}</div>
+                    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center">
+                        <span className="text-sm text-slate-500 uppercase tracking-wider font-bold">Total Score</span>
+                        <div className={`text-6xl font-extrabold mt-2 ${pct >= 70 ? 'text-emerald-400' : pct >= 40 ? 'text-amber-400' : 'text-red-400'}`}>
+                            {submissionResult.totalScore}
+                            <span className="text-2xl text-slate-600">/{maxPossible}</span>
+                        </div>
+                        <div className="mt-3 h-3 bg-slate-800 rounded-full overflow-hidden max-w-xs mx-auto">
+                            <div className={`h-full rounded-full transition-all duration-1000 ${pct >= 70 ? 'bg-emerald-500' : pct >= 40 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${pct}%` }} />
+                        </div>
+                    </div>
+                    
+                    <div className="space-y-3">
+                        {submissionResult.sectionSubmissions?.map((section, idx) => (
+                            <div key={idx} className="flex justify-between items-center p-4 bg-slate-900 border border-slate-800 rounded-xl">
+                                <div className="flex items-center gap-3">
+                                    {section.passedCases === section.totalCases ? (
+                                        <CheckCircle className="h-5 w-5 text-emerald-400" />
+                                    ) : (
+                                        <XCircle className="h-5 w-5 text-red-400" />
+                                    )}
+                                    <span className="font-medium">Question {idx + 1}</span>
+                                </div>
+                                <div className="flex items-center gap-4">
+                                    <span className="text-sm text-slate-400">
+                                        {section.passedCases}/{section.totalCases} passed
+                                    </span>
+                                    <span className={`font-bold px-3 py-1 rounded-full text-sm ${section.score > 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
+                                        +{section.score}
+                                    </span>
+                                </div>
                             </div>
-                            
-                            <div className="space-y-3 pt-4 border-t">
-                                {submissionResult.sectionSubmissions?.map((section, idx) => (
-                                    <div key={idx} className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
-                                        <span className="font-medium">Question {idx + 1}</span>
-                                        <div className="flex items-center gap-3">
-                                            <span className="text-sm text-muted-foreground">
-                                                {section.passedCases}/{section.totalCases} cases passed
-                                            </span>
-                                            <span className="font-bold text-primary">+{section.score}</span>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </CardContent>
-                    </Card>
+                        ))}
+                    </div>
                     
                     <div className="text-center">
-                        <Button onClick={() => navigate(-1)}>← Back to Classroom</Button>
+                        <Button onClick={() => navigate(-1)} className="bg-indigo-600 hover:bg-indigo-500 px-8">
+                            ← Back to Classroom
+                        </Button>
                     </div>
                 </div>
             </div>
         );
     }
 
+    const isLastQuestion = currentQuestionIndex === test.questions.length - 1;
+
+    // ─── Main Test UI ─────────────────────────
     return (
-        <div className="h-screen flex flex-col bg-background">
+        <div className="h-screen flex flex-col bg-slate-950 text-white">
             {/* Header */}
-            <div className="h-16 border-b flex items-center justify-between px-6 bg-card shrink-0">
+            <div className="h-14 border-b border-slate-800 flex items-center justify-between px-6 bg-slate-900 shrink-0">
                 <div className="flex items-center gap-4">
                     <h1 className="font-bold text-lg">{test.title}</h1>
-                    <span className="text-sm text-muted-foreground border-l pl-4">
-                        Question {currentQuestionIndex + 1} of {test.questions.length}
+                    <span className="text-sm text-slate-400 border-l border-slate-700 pl-4">
+                        Q {currentQuestionIndex + 1}/{test.questions.length}
                     </span>
                 </div>
                 
-                <div className="flex items-center gap-4">
-                    <div className={`flex items-center gap-2 text-sm font-mono px-3 py-1 rounded ${
-                        isTimeLow 
-                            ? 'bg-red-500/10 text-red-500 animate-pulse border border-red-500/30' 
-                            : 'bg-muted'
+                <div className="flex items-center gap-3">
+                    {/* Running Score */}
+                    <div className="flex items-center gap-2 text-sm font-mono bg-emerald-500/10 text-emerald-400 px-3 py-1 rounded-lg border border-emerald-500/20">
+                        <Trophy className="h-3.5 w-3.5" />
+                        <span>{totalScore} pts</span>
+                        <span className="text-emerald-600">({solvedCount}/{test.questions.length})</span>
+                    </div>
+
+                    <div className={`flex items-center gap-2 text-sm font-mono px-3 py-1 rounded-lg ${
+                        isTimeLow ? 'bg-red-500/10 text-red-400 animate-pulse border border-red-500/30' : 'bg-slate-800 text-white'
                     }`}>
                         <Timer className="h-4 w-4" />
                         <span>{formatTime(timeLeft)}</span>
                     </div>
-                    <Button variant="destructive" onClick={submitTest}>Submit Test</Button>
+
+                    <Button 
+                        variant="destructive" 
+                        size="sm"
+                        onClick={() => handleFinalSubmit(false)}
+                        disabled={isSubmitting}
+                        className="gap-1"
+                    >
+                        {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                        Submit Test
+                    </Button>
                 </div>
             </div>
 
             {/* Main Area */}
             <div className="flex-1 flex overflow-hidden">
                 {/* Left: Problem Statement */}
-                <div className="w-1/3 border-r overflow-y-auto p-6 bg-card/50">
-                    <h2 className="text-xl font-bold mb-4">{currentQuestion.problemTitle}</h2>
-                    <div className="prose dark:prose-invert max-w-none text-sm mb-8 whitespace-pre-wrap">
+                <div className="w-[35%] border-r border-slate-800 overflow-y-auto p-6 bg-slate-950">
+                    <h2 className="text-xl font-bold mb-4 text-white">{currentQuestion.problemTitle}</h2>
+                    <div className="text-sm text-slate-300 mb-6 whitespace-pre-wrap leading-relaxed">
                         {currentQuestion.problemDescription}
                     </div>
 
-                    <div className="space-y-4">
-                        <h3 className="font-semibold text-sm">Sample Test Cases</h3>
+                    <div className="space-y-3">
+                        <h3 className="font-semibold text-sm text-slate-400 uppercase tracking-wider">Sample Test Cases</h3>
                         {currentQuestion.testCases?.filter(tc => !tc.isHidden).slice(0, 2).map((tc, i) => (
-                            <div key={i} className="bg-muted/50 p-3 rounded-md text-sm font-mono space-y-2">
+                            <div key={i} className="bg-slate-900 border border-slate-800 p-3 rounded-lg text-sm font-mono space-y-2">
                                 <div>
-                                    <span className="text-muted-foreground text-xs block mb-1">Input:</span>
-                                    <div className="bg-background border p-2 rounded whitespace-pre-wrap">{tc.input}</div>
+                                    <span className="text-slate-500 text-xs block mb-1">Input:</span>
+                                    <div className="bg-slate-950 border border-slate-800 p-2 rounded text-slate-300 whitespace-pre-wrap">{tc.input}</div>
                                 </div>
                                 <div>
-                                    <span className="text-muted-foreground text-xs block mb-1">Expected Output:</span>
-                                    <div className="bg-background border p-2 rounded whitespace-pre-wrap">{tc.output}</div>
+                                    <span className="text-slate-500 text-xs block mb-1">Expected Output:</span>
+                                    <div className="bg-slate-950 border border-slate-800 p-2 rounded text-slate-300 whitespace-pre-wrap">{tc.output}</div>
                                 </div>
                             </div>
                         ))}
                     </div>
                 </div>
 
-                {/* Right: Editor & Console */}
-                <div className="w-2/3 flex flex-col">
+                {/* Right: Editor & Results */}
+                <div className="w-[65%] flex flex-col">
                     {/* Toolbar */}
-                    <div className="h-12 border-b flex items-center justify-between px-4 bg-muted/20">
+                    <div className="h-11 border-b border-slate-800 flex items-center justify-between px-4 bg-slate-900/50">
                         <select 
-                            className="bg-transparent text-sm border-none focus:ring-0 cursor-pointer font-medium"
+                            className="bg-slate-800 text-sm border border-slate-700 rounded px-2 py-1 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
                             value={activeLanguage}
                             onChange={handleLanguageChange}
                         >
@@ -403,9 +444,14 @@ const TestArena = () => {
                             <option value="cpp">C++ (GCC)</option>
                         </select>
                         
-                        <Button size="sm" onClick={runCode} disabled={isRunning} className="gap-2">
+                        <Button 
+                            size="sm" 
+                            onClick={runCode} 
+                            disabled={isRunning} 
+                            className="gap-2 bg-indigo-600 hover:bg-indigo-500"
+                        >
                             {isRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-                            Run Code
+                            Run & Test
                         </Button>
                     </div>
 
@@ -418,50 +464,161 @@ const TestArena = () => {
                          />
                     </div>
 
-                    {/* Output Console */}
-                    <div className="h-1/3 border-t bg-black/90 text-white font-mono text-sm flex flex-col shrink-0">
-                         <div className="p-2 border-b border-white/10 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                             Console Output
-                         </div>
-                         <div className="p-4 overflow-auto flex-1 whitespace-pre-wrap">
-                             {output ? (
-                                 <span className={executionError ? "text-red-400" : "text-green-400"}>
-                                     {output}
-                                 </span>
-                             ) : (
-                                 <span className="text-white/30 italic">Run your code to see output here...</span>
-                             )}
-                         </div>
+                    {/* Test Case Results Panel */}
+                    <div className="h-[40%] border-t border-slate-800 bg-slate-950 flex flex-col shrink-0 overflow-hidden">
+                        <div className="px-4 py-2 border-b border-slate-800 flex items-center justify-between bg-slate-900/50">
+                            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Test Results</span>
+                            {currentResults && (
+                                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                                    allPassed ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'
+                                }`}>
+                                    {currentResults.filter(r => r.passed).length}/{currentResults.length} Passed
+                                </span>
+                            )}
+                        </div>
+                        
+                        <div className="flex-1 overflow-auto p-4">
+                            {!currentResults ? (
+                                <div className="h-full flex items-center justify-center text-slate-600 text-sm italic">
+                                    Click "Run & Test" to check your code against all test cases
+                                </div>
+                            ) : (
+                                <div className="space-y-2">
+                                    {currentResults.map((tc, i) => (
+                                        <div key={i} className={`p-3 rounded-lg border text-sm font-mono ${
+                                            tc.passed 
+                                                ? 'bg-emerald-500/5 border-emerald-500/20' 
+                                                : 'bg-red-500/5 border-red-500/20'
+                                        }`}>
+                                            <div className="flex items-center justify-between mb-2">
+                                                <span className="font-bold text-xs uppercase tracking-wider text-slate-400">
+                                                    Test Case {i + 1} {tc.isHidden ? '(Hidden)' : ''}
+                                                </span>
+                                                {tc.passed ? (
+                                                    <span className="flex items-center gap-1 text-emerald-400 text-xs font-bold">
+                                                        <CheckCircle className="h-3.5 w-3.5" /> PASSED
+                                                    </span>
+                                                ) : (
+                                                    <span className="flex items-center gap-1 text-red-400 text-xs font-bold">
+                                                        <XCircle className="h-3.5 w-3.5" /> FAILED
+                                                    </span>
+                                                )}
+                                            </div>
+                                            {!tc.isHidden && (
+                                                <div className="grid grid-cols-3 gap-2 text-xs">
+                                                    <div>
+                                                        <span className="text-slate-500 block mb-0.5">Input</span>
+                                                        <div className="bg-black/30 p-1.5 rounded whitespace-pre-wrap text-slate-300">{tc.input || '—'}</div>
+                                                    </div>
+                                                    <div>
+                                                        <span className="text-slate-500 block mb-0.5">Your Output</span>
+                                                        <div className={`bg-black/30 p-1.5 rounded whitespace-pre-wrap ${tc.passed ? 'text-emerald-300' : 'text-red-300'}`}>{tc.output || '—'}</div>
+                                                    </div>
+                                                    <div>
+                                                        <span className="text-slate-500 block mb-0.5">Expected</span>
+                                                        <div className="bg-black/30 p-1.5 rounded whitespace-pre-wrap text-slate-300">{tc.expected || '—'}</div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+
+                                    {/* Action after results */}
+                                    <div className="pt-4 flex justify-center">
+                                        {allPassed ? (
+                                            isLastQuestion ? (
+                                                <Button 
+                                                    onClick={() => handleFinalSubmit(false)} 
+                                                    className="bg-emerald-600 hover:bg-emerald-500 gap-2 px-6 shadow-lg shadow-emerald-600/20"
+                                                    disabled={isSubmitting}
+                                                >
+                                                    {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trophy className="h-4 w-4" />}
+                                                    All Passed! Submit Test 🎉
+                                                </Button>
+                                            ) : (
+                                                <Button 
+                                                    onClick={goToNextQuestion} 
+                                                    className="bg-emerald-600 hover:bg-emerald-500 gap-2 px-6 shadow-lg shadow-emerald-600/20"
+                                                >
+                                                    <CheckCircle className="h-4 w-4" />
+                                                    All Passed! Next Question
+                                                    <ArrowRight className="h-4 w-4" />
+                                                </Button>
+                                            )
+                                        ) : (
+                                            <div className="text-center space-y-2">
+                                                <p className="text-red-400 text-sm">Some test cases failed. Fix your code and try again.</p>
+                                                <div className="flex gap-3 justify-center">
+                                                    {!isLastQuestion && (
+                                                        <Button variant="outline" size="sm" onClick={goToNextQuestion} className="border-slate-700 text-slate-300 hover:bg-slate-800">
+                                                            Skip → Next Question
+                                                        </Button>
+                                                    )}
+                                                    <Button 
+                                                        variant="outline" 
+                                                        size="sm" 
+                                                        onClick={() => handleFinalSubmit(false)} 
+                                                        className="border-red-800 text-red-400 hover:bg-red-500/10"
+                                                        disabled={isSubmitting}
+                                                    >
+                                                        Submit Test Anyway
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>
             
-            {/* Footer Navigation */}
-            <div className="h-14 border-t bg-card px-6 flex items-center justify-between shrink-0">
+            {/* Footer: Question Navigation */}
+            <div className="h-12 border-t border-slate-800 bg-slate-900 px-6 flex items-center justify-between shrink-0">
                 <Button 
                     variant="ghost" 
-                    onClick={() => setCurrentQuestionIndex(prev => Math.max(0, prev - 1))}
+                    size="sm"
+                    onClick={() => { setCurrentQuestionIndex(prev => Math.max(0, prev - 1)); setAllPassed(false); }}
                     disabled={currentQuestionIndex === 0}
+                    className="text-slate-400 hover:text-white hover:bg-slate-800"
                 >
-                    <ChevronLeft className="h-4 w-4 mr-2" /> Previous
+                    <ChevronLeft className="h-4 w-4 mr-1" /> Prev
                 </Button>
                 
                 <div className="flex gap-2">
-                    {test.questions.map((_, i) => (
-                        <div 
-                            key={i} 
-                            onClick={() => setCurrentQuestionIndex(i)}
-                            className={`h-2 w-2 rounded-full cursor-pointer transition-colors ${i === currentQuestionIndex ? 'bg-primary' : 'bg-muted-foreground/30 hover:bg-muted-foreground'}`}
-                        />
-                    ))}
+                    {test.questions.map((q, i) => {
+                        const isSolved = questionScores[q._id] > 0;
+                        const hasResults = !!testCaseResults[q._id];
+                        return (
+                            <button 
+                                key={i} 
+                                onClick={() => { setCurrentQuestionIndex(i); setAllPassed(false); }}
+                                className={`
+                                    h-8 w-8 rounded-lg text-xs font-bold transition-all
+                                    ${i === currentQuestionIndex 
+                                        ? 'bg-indigo-600 text-white ring-2 ring-indigo-400 ring-offset-2 ring-offset-slate-900' 
+                                        : isSolved 
+                                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
+                                            : hasResults 
+                                                ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                                                : 'bg-slate-800 text-slate-500 hover:text-slate-300 border border-slate-700'}
+                                `}
+                            >
+                                {i + 1}
+                            </button>
+                        );
+                    })}
                 </div>
 
                 <Button 
                     variant="ghost"
-                    onClick={() => setCurrentQuestionIndex(prev => Math.min(test.questions.length - 1, prev + 1))}
-                    disabled={currentQuestionIndex === test.questions.length - 1}
+                    size="sm"
+                    onClick={() => { setCurrentQuestionIndex(prev => Math.min(test.questions.length - 1, prev + 1)); setAllPassed(false); }}
+                    disabled={isLastQuestion}
+                    className="text-slate-400 hover:text-white hover:bg-slate-800"
                 >
-                    Next <ChevronRight className="h-4 w-4 ml-2" />
+                    Next <ChevronRight className="h-4 w-4 ml-1" />
                 </Button>
             </div>
         </div>
