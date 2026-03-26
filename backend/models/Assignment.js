@@ -52,9 +52,9 @@ const assignmentSchema = new mongoose.Schema({
   
   // Attachments
   attachments: [{
-    name: String,
-    url: String,
-    type: String
+    name: { type: String },
+    url: { type: String },
+    fileType: { type: String }
   }],
   
   // Submissions
