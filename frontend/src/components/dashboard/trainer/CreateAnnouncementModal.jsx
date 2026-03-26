@@ -36,7 +36,7 @@ const CreateAnnouncementModal = ({ isOpen, onClose, batchId, onAnnouncementCreat
                 setAttachments(prev => [...prev, {
                     name: file.name,
                     url: res.data.data,
-                    type: file.type.startsWith('image') ? 'image' : 
+                    fileType: file.type.startsWith('image') ? 'image' : 
                           file.type === 'application/pdf' ? 'pdf' : 'file'
                 }]);
             }
@@ -110,7 +110,7 @@ const CreateAnnouncementModal = ({ isOpen, onClose, batchId, onAnnouncementCreat
                         <div className="space-y-2 mb-2">
                             {attachments.map((file, index) => (
                                 <div key={index} className="flex items-center gap-2 bg-muted/50 rounded-lg px-3 py-2 text-sm">
-                                    {file.type === 'image' ? (
+                                    {file.fileType === 'image' ? (
                                         <Image className="h-4 w-4 text-blue-400 flex-shrink-0" />
                                     ) : (
                                         <FileText className="h-4 w-4 text-orange-400 flex-shrink-0" />
