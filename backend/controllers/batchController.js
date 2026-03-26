@@ -193,33 +193,63 @@ exports.removeVideoFromBatch = async (req, res) => {
 
 const Enrollment = require('../models/Enrollment');
 
-// ... (existing imports)
-
-// @desc    Enroll student in batch (After Course Enrollment)
+// @desc    Enroll student in batch (Handles both free and paid courses)
 // @route   POST /api/batches/:id/enroll
 // @access  Private (Student)
 exports.enrollInBatch = async (req, res) => {
   try {
-    const batch = await Batch.findById(req.params.id);
+    const batch = await Batch.findById(req.params.id).populate('course');
     
     if (!batch) {
       return res.status(404).json({ success: false, message: 'Batch not found' });
     }
     
-    // 1. Verify Course Enrollment (Payment)
-    const courseEnrollment = await Enrollment.findOne({
-        student: req.user.id,
-        course: batch.course
+    // Check if already enrolled in this batch
+    const existingBatchEnrollment = await BatchEnrollment.findOne({
+      student: req.user.id,
+      batch: req.params.id
     });
 
-    if (!courseEnrollment) {
-        return res.status(403).json({ success: false, message: 'Please enroll in the course first.' });
+    if (existingBatchEnrollment) {
+      return res.status(400).json({ success: false, message: 'You are already enrolled in this batch.' });
     }
 
-    // 2. Check if already joined ANY batch for this course
-    if (courseEnrollment.batch) {
-         // Optional: Allow switching batches? For now strict 1 batch rule as requested.
-         return res.status(400).json({ success: false, message: 'You have already joined a batch for this course.' });
+    // Determine effective price
+    const batchPrice = batch.batchPrice > 0 ? batch.batchPrice : (batch.course?.price || 0);
+    
+    // If course is NOT free and no Enrollment exists, block
+    let courseEnrollment = await Enrollment.findOne({
+        student: req.user.id,
+        course: batch.course._id || batch.course
+    });
+
+    if (!courseEnrollment && batchPrice > 0) {
+        return res.status(403).json({ success: false, message: 'Please complete payment to enroll.' });
+    }
+
+    // For FREE courses: auto-create Enrollment record if it doesn't exist
+    if (!courseEnrollment) {
+        courseEnrollment = await Enrollment.create({
+            student: req.user.id,
+            course: batch.course._id || batch.course,
+            batch: batch._id,
+            paymentStatus: 'free',
+            paymentAmount: 0
+        });
+
+        // Update course student count
+        await Course.findByIdAndUpdate(batch.course._id || batch.course, {
+            $inc: { studentsEnrolled: 1 }
+        });
+
+        // Add to user's enrolled courses
+        await User.findByIdAndUpdate(req.user.id, {
+            $addToSet: { enrolledCourses: batch.course._id || batch.course }
+        });
+    } else if (!courseEnrollment.batch) {
+        // Existing enrollment without batch — assign this batch
+        courseEnrollment.batch = batch._id;
+        await courseEnrollment.save();
     }
 
     // Check if batch is full
@@ -227,19 +257,15 @@ exports.enrollInBatch = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Batch is full' });
     }
     
-    // Create BatchEnrollment (Detailed tracking)
+    // Create BatchEnrollment (detailed tracking)
     const batchEnrollment = await BatchEnrollment.create({
       student: req.user.id,
       batch: req.params.id,
-      course: batch.course,
-      paymentAmount: 0, // Paid via Course Enrollment
-      paymentStatus: 'paid'
+      course: batch.course._id || batch.course,
+      paymentAmount: batchPrice,
+      paymentStatus: batchPrice === 0 ? 'free' : 'paid'
     });
     
-    // Update Main Enrollment with Batch ID
-    courseEnrollment.batch = batch._id;
-    await courseEnrollment.save();
-
     // Update Batch
     batch.enrolledStudents.push(req.user.id);
     await batch.updateEnrollmentCount();
