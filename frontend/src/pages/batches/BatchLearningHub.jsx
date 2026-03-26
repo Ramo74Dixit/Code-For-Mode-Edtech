@@ -7,7 +7,7 @@ import SubmissionListModal from '../../components/dashboard/trainer/SubmissionLi
 import CreateAssignmentModal from '../../components/dashboard/trainer/CreateAssignmentModal';
 import CreateTestModal from '../../components/dashboard/trainer/CreateTestModal';
 import CreateAnnouncementModal from '../../components/dashboard/trainer/CreateAnnouncementModal';
-import { Video, Calendar, FileText, Download, Link as LinkIcon, Users, ArrowLeft, PlayCircle, X, BookOpen, Code, Trophy, Sparkles, Megaphone, Bell } from 'lucide-react';
+import { Video, Calendar, FileText, Download, Link as LinkIcon, Users, ArrowLeft, PlayCircle, X, BookOpen, Code, Trophy, Sparkles, Megaphone, Bell, Trash2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Plyr } from 'plyr-react';
 import 'plyr-react/plyr.css';
@@ -92,6 +92,19 @@ const BatchLearningHub = () => {
       const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=|live\/)([^#&?]*).*/;
       const match = url.match(regExp);
       return (match && match[2].length === 11) ? match[2] : null;
+  };
+
+  const handleDeleteRecording = async (e, sessionId) => {
+      e.stopPropagation();
+      if (!window.confirm("Are you sure you want to delete this recording?")) return;
+      try {
+          await api.delete(`/live-sessions/${sessionId}`);
+          alert("Recording deleted successfully");
+          fetchData();
+      } catch (error) {
+          console.error("Delete error", error);
+          alert(error.response?.data?.message || 'Failed to delete recording');
+      }
   };
 
   const handleAssignmentSubmit = async (e) => {
@@ -294,6 +307,15 @@ const BatchLearningHub = () => {
                                             onClick={() => setPlayingVideo({ ...session, youtubeId: videoId, isLiveRecording: true })}
                                             className="group relative bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden cursor-pointer hover:shadow-2xl hover:shadow-indigo-500/10 transition-all duration-300 hover:-translate-y-1"
                                         >
+                                            {user.role === 'trainer' && (
+                                                <button
+                                                    onClick={(e) => handleDeleteRecording(e, session._id)}
+                                                    className="absolute top-3 right-3 z-10 p-2 bg-black/40 hover:bg-rose-500/80 text-white rounded-full backdrop-blur-md opacity-0 group-hover:opacity-100 transition-all duration-300"
+                                                    title="Delete Recording"
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                </button>
+                                            )}
                                             <div className="aspect-video relative overflow-hidden">
                                                 <img 
                                                     src={`https://img.youtube.com/vi/${videoId}/mqdefault.jpg`}
