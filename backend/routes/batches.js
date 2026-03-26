@@ -12,7 +12,8 @@ const {
   getTrainerBatches,
   getBatchStudents,
   addResourceToBatch,
-  createAnnouncement
+  createAnnouncement,
+  getTrainerDashboardStats
 } = require('../controllers/batchController');
 const { protect, authorize } = require('../middleware/auth');
 
@@ -21,6 +22,7 @@ const router = express.Router();
 router.get('/', getAllBatches);
 router.get('/my/enrollments', protect, getMyBatches);
 router.get('/trainer/my-batches', protect, authorize('trainer', 'admin'), getTrainerBatches);
+router.get('/trainer/dashboard-stats', protect, authorize('trainer', 'admin'), getTrainerDashboardStats);
 router.get('/:id', getBatch);
 router.get('/:id/students', protect, authorize('trainer', 'admin'), getBatchStudents);
 

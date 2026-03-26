@@ -414,3 +414,100 @@ exports.createAnnouncement = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// @desc    Get real trainer dashboard stats (revenue, next sessions, batch-wise)
+// @route   GET /api/batches/trainer/dashboard-stats
+// @access  Private (Trainer/Admin)
+exports.getTrainerDashboardStats = async (req, res) => {
+  try {
+    const Enrollment = require('../models/Enrollment');
+    const LiveSession = require('../models/LiveSession');
+
+    // 1. Get all batches by this trainer
+    const batches = await Batch.find({ trainer: req.user.id })
+      .populate('course', 'title thumbnail price');
+
+    const batchIds = batches.map(b => b._id);
+
+    // 2. Get all enrollments for these batches' courses
+    const courseIds = [...new Set(batches.map(b => b.course?._id?.toString()).filter(Boolean))];
+    const enrollments = await Enrollment.find({
+      course: { $in: courseIds },
+      paymentStatus: { $in: ['paid', 'free'] }
+    });
+
+    // 3. Compute total revenue
+    const totalRevenue = enrollments.reduce((sum, e) => sum + (e.paymentAmount || 0), 0);
+
+    // 4. Compute batch-wise stats
+    const batchEnrollments = await BatchEnrollment.find({ batch: { $in: batchIds } });
+    
+    // Group batch enrollments by batch
+    const batchEnrollMap = {};
+    batchEnrollments.forEach(be => {
+      const bid = be.batch.toString();
+      if (!batchEnrollMap[bid]) batchEnrollMap[bid] = [];
+      batchEnrollMap[bid].push(be);
+    });
+
+    // 5. Get next upcoming session per batch
+    const now = new Date();
+    const upcomingSessions = await LiveSession.find({
+      batch: { $in: batchIds },
+      scheduledStartTime: { $gte: now }
+    }).sort({ scheduledStartTime: 1 });
+
+    const nextSessionMap = {};
+    upcomingSessions.forEach(s => {
+      const bid = s.batch.toString();
+      if (!nextSessionMap[bid]) {
+        nextSessionMap[bid] = s; // First one is the nearest
+      }
+    });
+
+    // 6. Get total live sessions count per batch (for "Classes" stat)
+    const allSessions = await LiveSession.find({ batch: { $in: batchIds } });
+    const sessionCountMap = {};
+    allSessions.forEach(s => {
+      const bid = s.batch.toString();
+      sessionCountMap[bid] = (sessionCountMap[bid] || 0) + 1;
+    });
+
+    // 7. Build batch-wise revenue (from course price * enrollments in that batch)
+    const batchStats = batches.map(batch => {
+      const bid = batch._id.toString();
+      const batchStudents = batchEnrollMap[bid]?.length || batch.currentEnrollment || 0;
+      const coursePrice = batch.course?.price || 0;
+      const batchRevenue = coursePrice * batchStudents;
+      const nextSession = nextSessionMap[bid] || null;
+      const totalClasses = sessionCountMap[bid] || 0;
+
+      return {
+        batchId: bid,
+        batchName: batch.name,
+        courseName: batch.course?.title || 'Untitled',
+        students: batchStudents,
+        revenue: batchRevenue,
+        totalClasses,
+        nextSession: nextSession ? {
+          title: nextSession.title,
+          startTime: nextSession.scheduledStartTime
+        } : null
+      };
+    });
+
+    res.json({
+      success: true,
+      data: {
+        totalRevenue,
+        totalStudents: batchEnrollments.length,
+        totalBatches: batches.length,
+        totalCourses: courseIds.length,
+        batchStats
+      }
+    });
+  } catch (error) {
+    console.error('getTrainerDashboardStats error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
