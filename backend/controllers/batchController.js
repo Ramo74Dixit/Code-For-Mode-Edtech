@@ -340,7 +340,7 @@ exports.getBatchStudents = async (req, res) => {
     }
     
     const enrollments = await BatchEnrollment.find({ batch: req.params.id })
-      .populate('student', 'name email')
+      .populate('student', 'name email profileImage phone')
       .sort('-enrolledAt');
     
     res.json({
@@ -508,6 +508,81 @@ exports.getTrainerDashboardStats = async (req, res) => {
     });
   } catch (error) {
     console.error('getTrainerDashboardStats error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Get a student's details for a batch (test history, assignment submissions)
+// @route   GET /api/batches/:id/students/:studentId/details
+// @access  Private (Trainer/Admin)
+exports.getStudentBatchDetails = async (req, res) => {
+  try {
+    const { id: batchId, studentId } = req.params;
+    const TestSubmission = require('../models/TestSubmission');
+    const AssignmentSubmission = require('../models/AssignmentSubmission');
+    const Test = require('../models/Test');
+
+    // 1. Get all tests for this batch
+    const tests = await Test.find({ batch: batchId }).select('title startTime duration');
+
+    // 2. Get this student's test submissions
+    const testIds = tests.map(t => t._id);
+    const testSubmissions = await TestSubmission.find({
+      student: studentId,
+      test: { $in: testIds }
+    }).populate('test', 'title startTime duration');
+
+    // 3. Build test results
+    const testResults = tests.map(test => {
+      const submission = testSubmissions.find(ts => ts.test?._id?.toString() === test._id.toString());
+      return {
+        testId: test._id,
+        testTitle: test.title,
+        testDate: test.startTime,
+        attended: !!submission,
+        totalScore: submission?.totalScore || 0,
+        status: submission?.status || 'not_attempted',
+        submittedAt: submission?.submittedAt || null
+      };
+    });
+
+    // 4. Get assignment submissions for this batch
+    const Assignment = require('../models/Assignment');
+    const batchAssignments = await Assignment.find({ batch: batchId }).select('title dueDate maxMarks');
+    const assignmentSubmissions = await AssignmentSubmission.find({
+      student: studentId,
+      batch: batchId
+    }).populate('assignment', 'title dueDate maxMarks');
+
+    const assignmentResults = batchAssignments.map(assignment => {
+      const submission = assignmentSubmissions.find(as => 
+        as.assignment?._id?.toString() === assignment._id.toString()
+      );
+      return {
+        assignmentId: assignment._id,
+        title: assignment.title,
+        dueDate: assignment.dueDate,
+        maxMarks: assignment.maxMarks,
+        submitted: !!submission,
+        marks: submission?.marks || null,
+        status: submission?.status || 'not_submitted',
+        submittedAt: submission?.submittedAt || null
+      };
+    });
+
+    // 5. Get student info
+    const student = await User.findById(studentId).select('name email profileImage phone');
+
+    res.json({
+      success: true,
+      data: {
+        student,
+        testResults,
+        assignmentResults
+      }
+    });
+  } catch (error) {
+    console.error('getStudentBatchDetails error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
