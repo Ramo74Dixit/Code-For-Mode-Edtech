@@ -402,7 +402,8 @@ exports.createAnnouncement = async (req, res) => {
         title: req.body.title,
         message: req.body.message,
         batch: batch._id,
-        trainer: req.user.id
+        trainer: req.user.id,
+        attachments: req.body.attachments || []
     });
     
     batch.announcements.unshift(announcement._id);

@@ -7,9 +7,7 @@ const AssignmentSubmission = require('../models/AssignmentSubmission');
 // @access  Private (Trainer/Admin)
 exports.createAssignment = async (req, res) => {
   try {
-    const { title, description, batchId, dueDate, totalMarks } = req.body;
-    console.log("DEBUG: createAssignment body:", req.body);
-    console.log("DEBUG: User:", req.user.id);
+    const { title, description, batchId, dueDate, totalMarks, attachments } = req.body;
 
     const assignment = await Assignment.create({
       title,
@@ -17,7 +15,8 @@ exports.createAssignment = async (req, res) => {
       batch: batchId,
       trainer: req.user.id,
       dueDate,
-      maxMarks: totalMarks || 100
+      maxMarks: totalMarks || 100,
+      attachments: attachments || []
     });
 
     // Add to batch
