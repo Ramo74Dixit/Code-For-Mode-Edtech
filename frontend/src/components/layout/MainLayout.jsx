@@ -13,7 +13,9 @@ import {
   Shield,
   MessageSquare,
   Bell,
-  Bot
+  Bot,
+  FileText,
+  FolderOpen
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
@@ -46,6 +48,8 @@ const MainLayout = () => {
     { icon: BookOpen, label: 'Courses', href: '/courses' },
     { icon: Users, label: 'Batches', href: '/batches' },
     { icon: Video, label: 'Live Classes', href: '/live-classes' },
+    { icon: FileText, label: 'Assignments', href: '/assignments' },
+    { icon: FolderOpen, label: 'Materials', href: '/materials' },
     { icon: MessageSquare, label: 'Community', href: '/community' },
     { icon: Bell, label: 'Announcements', href: '/announcements' },
     { icon: Bot, label: 'Interview Coach', href: '/interview' },

@@ -20,6 +20,7 @@ import TrainerProfile from './pages/profile/TrainerProfile';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AnnouncementList from './pages/announcements/AnnouncementList';
 import InterviewCoach from './pages/ai/InterviewCoach';
+import MaterialList from './pages/materials/MaterialList';
 
 // Temporary protected route wrapper
 const ProtectedRoute = ({ children }) => {
@@ -61,6 +62,7 @@ function App() {
               </Route>
 
               <Route path="assignments" element={<AssignmentList />} />
+              <Route path="materials" element={<MaterialList />} />
               <Route path="live-classes" element={<LiveSchedule />} />
               <Route path="community" element={<Community />} />
               <Route path="announcements" element={<AnnouncementList />} />
