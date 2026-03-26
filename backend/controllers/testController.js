@@ -93,6 +93,38 @@ exports.createTest = async (req, res) => {
   }
 };
 
+// @desc    Update an existing test (title, questions, test cases, etc.)
+// @route   PUT /api/tests/:id
+// @access  Private (Trainer/Admin)
+exports.updateTest = async (req, res) => {
+  try {
+    const test = await Test.findById(req.params.id);
+    if (!test) return res.status(404).json({ success: false, message: 'Test not found' });
+
+    // Only creator or admin can update
+    if (test.creator.toString() !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Not authorized to edit this test' });
+    }
+
+    const { title, description, questions, duration, startTime, endTime, status } = req.body;
+
+    if (title) test.title = title;
+    if (description !== undefined) test.description = description;
+    if (duration) test.duration = duration;
+    if (startTime) test.startTime = startTime;
+    if (endTime) test.endTime = endTime;
+    if (status) test.status = status;
+    if (questions) test.questions = questions;
+
+    await test.save();
+
+    res.json({ success: true, data: test });
+  } catch (error) {
+    console.error("Update Test Error:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 exports.getTestsByBatch = async (req, res) => {
   try {
     const tests = await Test.find({ batch: req.params.batchId })
