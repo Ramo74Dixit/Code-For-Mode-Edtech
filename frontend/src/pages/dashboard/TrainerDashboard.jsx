@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../..
 import { Button } from '../../components/ui/button';
 import { 
     Users, BookOpen, DollarSign, Calendar, Plus, Video, FileText, 
-    TrendingUp, BarChart3, MoreHorizontal, Search, Sparkles, Trophy, Zap, Clock 
+    TrendingUp, BarChart3, MoreHorizontal, Search, Sparkles, Trophy, Zap, Clock, IndianRupee
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import axios from 'axios';
@@ -11,6 +11,7 @@ import { useNavigate } from 'react-router-dom';
 import PageTransition from '../../components/ui/PageTransition';
 import SkeletonLoader from '../../components/ui/SkeletonLoader';
 import { motion } from 'framer-motion';
+import { format, isToday, isTomorrow } from 'date-fns';
 
 // Modals
 import CreateBatchModal from '../../components/dashboard/trainer/CreateBatchModal';
@@ -30,6 +31,7 @@ const TrainerDashboard = () => {
         totalStudents: 0
     });
     const [batches, setBatches] = useState([]);
+    const [batchStats, setBatchStats] = useState([]);
     const [courses, setCourses] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -48,25 +50,25 @@ const TrainerDashboard = () => {
             const token = localStorage.getItem('token');
             const headers = { Authorization: `Bearer ${token}` };
 
-            const [batchesRes, coursesRes] = await Promise.all([
+            const [batchesRes, coursesRes, statsRes] = await Promise.all([
                 axios.get('https://code-for-mode-edtech.onrender.com/api/batches/trainer/my-batches', { headers }),
-                axios.get('https://code-for-mode-edtech.onrender.com/api/courses/trainer/my-courses', { headers })
+                axios.get('https://code-for-mode-edtech.onrender.com/api/courses/trainer/my-courses', { headers }),
+                axios.get('https://code-for-mode-edtech.onrender.com/api/batches/trainer/dashboard-stats', { headers })
             ]);
 
             const batchesData = batchesRes.data.data || [];
             const coursesData = coursesRes.data.data || [];
+            const dashStats = statsRes.data.data || {};
 
             setBatches(batchesData);
             setCourses(coursesData);
-
-            // Mock Revenue Calculation
-            const estimatedRevenue = batchesData.reduce((acc, b) => acc + (b.batchPrice * (b.currentEnrollment || 5)), 0);
+            setBatchStats(dashStats.batchStats || []);
 
             setStats({
-                revenue: estimatedRevenue,
-                activeBatches: batchesData.length,
-                totalCourses: coursesData.length,
-                totalStudents: batchesData.reduce((acc, b) => acc + (b.currentEnrollment || 0), 0)
+                revenue: dashStats.totalRevenue || 0,
+                activeBatches: dashStats.totalBatches || batchesData.length,
+                totalCourses: dashStats.totalCourses || coursesData.length,
+                totalStudents: dashStats.totalStudents || 0
             });
             
             setLoading(false);
@@ -88,8 +90,22 @@ const TrainerDashboard = () => {
         setStats(prev => ({ ...prev, totalCourses: prev.totalCourses + 1 }));
     };
 
-    const handleSessionScheduled = () => {};
+    const handleSessionScheduled = () => { fetchDashboardData(); };
     const handleAssignmentCreated = () => {};
+
+    // Format next session time
+    const formatNextSession = (nextSession) => {
+        if (!nextSession || !nextSession.startTime) return null;
+        const date = new Date(nextSession.startTime);
+        if (isToday(date)) return `Today, ${format(date, 'h:mm a')}`;
+        if (isTomorrow(date)) return `Tomorrow, ${format(date, 'h:mm a')}`;
+        return format(date, 'MMM d, h:mm a');
+    };
+
+    // Get batch stats for a batch
+    const getBatchStat = (batchId) => {
+        return batchStats.find(bs => bs.batchId === batchId) || {};
+    };
 
     if (loading) {
         return (
@@ -142,7 +158,7 @@ const TrainerDashboard = () => {
                 {/* Stats Command Center */}
                 <div className="grid gap-6 md:grid-cols-4">
                     {[
-                        { title: 'Total Revenue', value: `₹${stats.revenue.toLocaleString()}`, icon: DollarSign, color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20', trend: '+20%' },
+                        { title: 'Total Revenue', value: `₹${stats.revenue.toLocaleString('en-IN')}`, icon: IndianRupee, color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20', trend: `From ${stats.totalStudents} enrollments` },
                         { title: 'Active Students', value: stats.totalStudents, icon: Users, color: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/20', trend: `${stats.activeBatches} Batches` },
                         { title: 'Published Courses', value: stats.totalCourses, icon: BookOpen, color: 'text-purple-400', bg: 'bg-purple-500/10', border: 'border-purple-500/20', trend: 'Content' },
                         { title: 'Go Live', value: 'Webinar', icon: Video, color: 'text-orange-400', bg: 'bg-orange-500/10', border: 'border-orange-500/20', action: true }
@@ -199,7 +215,14 @@ const TrainerDashboard = () => {
                         {/* Trainer Command Cards */}
                         <div className="space-y-4">
                             {batches.length > 0 ? (
-                                batches.map((batch, idx) => (
+                                batches.map((batch, idx) => {
+                                    const bs = getBatchStat(batch._id);
+                                    const nextSessionText = formatNextSession(bs.nextSession);
+                                    const students = bs.students || batch.currentEnrollment || 0;
+                                    const totalClasses = bs.totalClasses || 0;
+                                    const batchRevenue = bs.revenue || 0;
+
+                                    return (
                                     <motion.div 
                                         key={batch._id}
                                         initial={{ opacity: 0, x: -20 }}
@@ -228,15 +251,15 @@ const TrainerDashboard = () => {
                                                 <div className="flex gap-6 py-2">
                                                     <div className="text-center">
                                                         <p className="text-xs text-slate-500 uppercase tracking-wider">Students</p>
-                                                        <p className="text-lg font-bold text-white">{batch.currentEnrollment || 0}</p>
+                                                        <p className="text-lg font-bold text-white">{students}</p>
                                                     </div>
                                                     <div className="text-center">
                                                         <p className="text-xs text-slate-500 uppercase tracking-wider">Classes</p>
-                                                        <p className="text-lg font-bold text-white">12<span className="text-slate-600 text-xs">/24</span></p>
+                                                        <p className="text-lg font-bold text-white">{totalClasses}</p>
                                                     </div>
                                                     <div className="text-center">
-                                                        <p className="text-xs text-slate-500 uppercase tracking-wider">Avg. Attd.</p>
-                                                        <p className="text-lg font-bold text-emerald-400">85%</p>
+                                                        <p className="text-xs text-slate-500 uppercase tracking-wider">Revenue</p>
+                                                        <p className="text-lg font-bold text-emerald-400">₹{batchRevenue.toLocaleString('en-IN')}</p>
                                                     </div>
                                                 </div>
                                             </div>
@@ -247,7 +270,9 @@ const TrainerDashboard = () => {
                                                      <p className="text-xs text-indigo-400 font-medium flex items-center gap-1">
                                                         <Clock className="h-3 w-3" /> Next Session
                                                      </p>
-                                                     <p className="text-sm text-white font-medium">Today, 4:00 PM</p>
+                                                     <p className="text-sm text-white font-medium">
+                                                        {nextSessionText || <span className="text-slate-500 italic">Not scheduled</span>}
+                                                     </p>
                                                 </div>
                                                 
                                                 <div className="grid grid-cols-2 gap-2">
@@ -263,10 +288,11 @@ const TrainerDashboard = () => {
 
                                         {/* Progress Bar Visual */}
                                         <div className="mt-4 w-full h-1 bg-slate-800 rounded-full overflow-hidden">
-                                            <div className="h-full bg-indigo-500 w-[50%]" />
+                                            <div className="h-full bg-indigo-500" style={{ width: `${totalClasses > 0 ? Math.min((totalClasses / Math.max(totalClasses, 20)) * 100, 100) : 0}%` }} />
                                         </div>
                                     </motion.div>
-                                ))
+                                    );
+                                })
                             ) : (
                                 <div className="text-center py-12 border border-dashed border-slate-800 rounded-2xl bg-slate-900/30">
                                     <Sparkles className="h-8 w-8 text-slate-600 mx-auto mb-3" />
@@ -349,4 +375,3 @@ const TrainerDashboard = () => {
 };
 
 export default TrainerDashboard;
-
