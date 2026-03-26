@@ -38,3 +38,31 @@ exports.getMyAnnouncements = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// @desc    Delete announcement
+// @route   DELETE /api/announcements/:id
+// @access  Private (Trainer/Admin)
+exports.deleteAnnouncement = async (req, res) => {
+  try {
+    const announcement = await Announcement.findById(req.params.id);
+    if (!announcement) {
+      return res.status(404).json({ success: false, message: 'Announcement not found' });
+    }
+
+    // Only creator or admin can delete
+    if (announcement.trainer.toString() !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Not authorized to delete this announcement' });
+    }
+
+    await Announcement.findByIdAndDelete(req.params.id);
+
+    // Remove from batch's announcements array
+    await Batch.findByIdAndUpdate(announcement.batch, {
+      $pull: { announcements: req.params.id }
+    });
+
+    res.json({ success: true, message: 'Announcement deleted' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
