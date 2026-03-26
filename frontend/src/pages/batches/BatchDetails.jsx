@@ -23,6 +23,7 @@ import AddResourceModal from '../../components/dashboard/trainer/AddResourceModa
 import CreateAnnouncementModal from '../../components/dashboard/trainer/CreateAnnouncementModal';
 import LiveChat from '../../components/chat/LiveChat';
 import BatchChat from '../../components/chat/BatchChat';
+import StudentDetailModal from '../../components/dashboard/trainer/StudentDetailModal';
 
 const BatchDetails = () => {
     const { id } = useParams();
@@ -42,6 +43,8 @@ const BatchDetails = () => {
     const [isTestModalOpen, setIsTestModalOpen] = useState(false);
     const [viewingResultsForTest, setViewingResultsForTest] = useState(null);
     const [playingVideo, setPlayingVideo] = useState(null);
+    const [students, setStudents] = useState([]);
+    const [selectedStudent, setSelectedStudent] = useState(null);
 
     const [error, setError] = useState(null);
 
@@ -59,7 +62,19 @@ const BatchDetails = () => {
             }
         };
         fetchBatch();
+        if (user?.role === 'trainer' || user?.role === 'admin') {
+            fetchStudents();
+        }
     }, [id]);
+
+    const fetchStudents = async () => {
+        try {
+            const res = await api.get(`/batches/${id}/students`);
+            setStudents(res.data.data || []);
+        } catch (err) {
+            console.error('Failed to fetch students:', err);
+        }
+    };
 
     const handleEnroll = async () => {
         try {
@@ -119,6 +134,7 @@ const BatchDetails = () => {
         { id: 'tests', label: 'Tests', icon: Code },
         { id: 'announcements', label: 'Announcements', icon: Megaphone },
         { id: 'community', label: 'Community', icon: MessageSquare },
+        ...(canManage ? [{ id: 'students', label: 'Students', icon: Users }] : []),
     ];
 
     return (
@@ -368,6 +384,56 @@ const BatchDetails = () => {
                                             <BatchChat roomId={batch._id} title={`${batch.name} Community`} />
                                         </div>
                                     )}
+
+                                    {activeTab === 'students' && canManage && (
+                                        <div className="space-y-6">
+                                            <div className="flex justify-between items-center">
+                                                <h3 className="text-xl font-bold text-white">Enrolled Students</h3>
+                                                <span className="text-sm bg-indigo-500/10 text-indigo-300 px-3 py-1 rounded-full border border-indigo-500/20">
+                                                    {students.length} student{students.length !== 1 ? 's' : ''}
+                                                </span>
+                                            </div>
+
+                                            {students.length > 0 ? (
+                                                <div className="grid gap-3">
+                                                    {students.map((enrollment, idx) => {
+                                                        const student = enrollment.student;
+                                                        if (!student) return null;
+                                                        return (
+                                                            <div
+                                                                key={enrollment._id || idx}
+                                                                onClick={() => setSelectedStudent(student._id)}
+                                                                className="flex items-center gap-4 p-4 rounded-xl bg-slate-900/30 border border-slate-800 hover:bg-slate-900/60 hover:border-indigo-500/30 transition-all cursor-pointer group"
+                                                            >
+                                                                <div className="h-12 w-12 rounded-full bg-indigo-500/10 flex items-center justify-center text-indigo-400 font-bold border border-indigo-500/20 overflow-hidden flex-shrink-0">
+                                                                    {student.profileImage ? (
+                                                                        <img src={student.profileImage} alt="" className="w-full h-full object-cover" />
+                                                                    ) : (
+                                                                        student.name?.[0]?.toUpperCase() || 'S'
+                                                                    )}
+                                                                </div>
+                                                                <div className="flex-1 min-w-0">
+                                                                    <p className="text-sm font-bold text-white group-hover:text-indigo-400 transition-colors">{student.name}</p>
+                                                                    <p className="text-xs text-slate-500 truncate">{student.email}</p>
+                                                                </div>
+                                                                {student.phone && (
+                                                                    <span className="text-xs text-slate-500 hidden sm:block">{student.phone}</span>
+                                                                )}
+                                                                <span className="text-xs text-slate-500">
+                                                                    Enrolled {new Date(enrollment.enrolledAt).toLocaleDateString()}
+                                                                </span>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            ) : (
+                                                <div className="text-center py-12 border border-dashed border-slate-800 rounded-xl">
+                                                    <Users className="h-8 w-8 text-slate-600 mx-auto mb-2" />
+                                                    <p className="text-slate-500">No students enrolled yet.</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
                                 </motion.div>
                             </AnimatePresence>
                         </div>
@@ -446,6 +512,15 @@ const BatchDetails = () => {
             <CreateAnnouncementModal isOpen={isAnnouncementModalOpen} onClose={() => setIsAnnouncementModalOpen(false)} batchId={batch._id} onAnnouncementCreated={() => window.location.reload()} />
             {isTestModalOpen && <CreateTestModal batchId={batch._id} onClose={() => setIsTestModalOpen(false)} onSuccess={() => window.location.reload()} />}
             {viewingResultsForTest && <TestResultsModal testId={viewingResultsForTest._id} testTitle={viewingResultsForTest.title} onClose={() => setViewingResultsForTest(null)} />}
+
+            {/* Student Detail Modal */}
+            {selectedStudent && (
+                <StudentDetailModal
+                    studentId={selectedStudent}
+                    batchId={batch._id}
+                    onClose={() => setSelectedStudent(null)}
+                />
+            )}
 
             {/* Cinematic Video Overlay */}
             {playingVideo && (
