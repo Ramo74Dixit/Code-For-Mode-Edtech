@@ -4,7 +4,7 @@ import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { 
     ArrowLeft, Users, Calendar, Video, BookOpen, MessageSquare, 
-    Megaphone, Link as LinkIcon, Download, FileText, Code, PlayCircle, Lock
+    Megaphone, Link as LinkIcon, Download, FileText, Code, PlayCircle, Lock, Edit
 } from 'lucide-react';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
@@ -24,6 +24,7 @@ import CreateAnnouncementModal from '../../components/dashboard/trainer/CreateAn
 import LiveChat from '../../components/chat/LiveChat';
 import BatchChat from '../../components/chat/BatchChat';
 import StudentDetailModal from '../../components/dashboard/trainer/StudentDetailModal';
+import EditTestModal from '../../components/dashboard/trainer/EditTestModal';
 
 const BatchDetails = () => {
     const { id } = useParams();
@@ -42,6 +43,7 @@ const BatchDetails = () => {
     const [isAnnouncementModalOpen, setIsAnnouncementModalOpen] = useState(false);
     const [isTestModalOpen, setIsTestModalOpen] = useState(false);
     const [viewingResultsForTest, setViewingResultsForTest] = useState(null);
+    const [editingTestId, setEditingTestId] = useState(null);
     const [playingVideo, setPlayingVideo] = useState(null);
     const [students, setStudents] = useState([]);
     const [selectedStudent, setSelectedStudent] = useState(null);
@@ -361,9 +363,16 @@ const BatchDetails = () => {
                                                                      <p className="text-xs text-slate-500">{new Date(item.createdAt || item.dueDate).toLocaleDateString()}</p>
                                                                  </div>
                                                              </div>
-                                                             {activeTab === 'tests' && (
-                                                                 <Button variant="outline" size="sm" className="border-slate-700 text-slate-300" onClick={() => window.open(`/tests/${item._id}/start`)}>Start</Button>
-                                                             )}
+                                                             <div className="flex items-center gap-2">
+                                                                 {activeTab === 'tests' && (
+                                                                     <Button variant="outline" size="sm" className="border-slate-700 text-slate-300" onClick={() => window.open(`/tests/${item._id}/start`)}>Start</Button>
+                                                                 )}
+                                                                 {activeTab === 'tests' && canManage && (
+                                                                     <Button variant="ghost" size="sm" className="text-indigo-400 hover:bg-indigo-500/10 px-2" onClick={() => setEditingTestId(item._id)}>
+                                                                         <Edit className="h-4 w-4" />
+                                                                     </Button>
+                                                                 )}
+                                                             </div>
                                                              {activeTab === 'resources' && (
                                                                  <a href={item.url} target="_blank" rel="noreferrer" className="text-indigo-400 hover:underline text-sm">Download</a>
                                                              )}
@@ -512,6 +521,7 @@ const BatchDetails = () => {
             <CreateAnnouncementModal isOpen={isAnnouncementModalOpen} onClose={() => setIsAnnouncementModalOpen(false)} batchId={batch._id} onAnnouncementCreated={() => window.location.reload()} />
             {isTestModalOpen && <CreateTestModal batchId={batch._id} onClose={() => setIsTestModalOpen(false)} onSuccess={() => window.location.reload()} />}
             {viewingResultsForTest && <TestResultsModal testId={viewingResultsForTest._id} testTitle={viewingResultsForTest.title} onClose={() => setViewingResultsForTest(null)} />}
+            {editingTestId && <EditTestModal testId={editingTestId} onClose={() => setEditingTestId(null)} onSuccess={() => window.location.reload()} />}
 
             {/* Student Detail Modal */}
             {selectedStudent && (
