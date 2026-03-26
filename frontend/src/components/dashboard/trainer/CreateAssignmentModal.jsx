@@ -1,34 +1,38 @@
 import React, { useState } from 'react';
-import { X, Calendar } from 'lucide-react';
+import { X } from 'lucide-react';
 import api from '../../../services/api';
 import { Button } from '../../ui/button';
 import { Input } from '../../ui/input';
 import { Textarea } from '../../ui/textarea';
+import DateTimePicker from '../../ui/DateTimePicker';
 
 const CreateAssignmentModal = ({ batchId, onClose, onSuccess }) => {
     const [formData, setFormData] = useState({
         title: '',
         description: '',
-        dueDate: '',
+        dueDate: null, // Date object for picker
         totalMarks: 100
     });
-    console.log("DEBUG: Modal batchId:", batchId); // Check if prop exists
     const [loading, setLoading] = useState(false);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        // FORCE CHECK
         if (!batchId) {
             alert("CRITICAL ERROR: batchId is missing! Cannot create assignment.");
             return;
         }
-        alert(`DEBUG: Creating assignment for Batch ID: ${batchId}`);
+        if (!formData.dueDate) {
+            alert("Please select a due date.");
+            return;
+        }
         
         setLoading(true);
         try {
-            console.log("DEBUG: Sending payload:", { ...formData, batchId });
             await api.post('/assignments', {
-                ...formData,
+                title: formData.title,
+                description: formData.description,
+                dueDate: formData.dueDate.toISOString(),
+                totalMarks: formData.totalMarks,
                 batchId 
             });
             onSuccess();
@@ -77,16 +81,13 @@ const CreateAssignmentModal = ({ batchId, onClose, onSuccess }) => {
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                              <label className="text-sm font-medium">Due Date</label>
-                             <div className="relative">
-                                 <Input 
-                                    type="datetime-local" 
-                                    value={formData.dueDate} 
-                                    onChange={(e) => setFormData({...formData, dueDate: e.target.value})} 
-                                    required
-                                    className="pl-10"
-                                 />
-                                 <Calendar className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                             </div>
+                             <DateTimePicker
+                                selected={formData.dueDate}
+                                onChange={(date) => setFormData({...formData, dueDate: date})}
+                                placeholderText="Pick due date & time"
+                                minDate={new Date()}
+                                required
+                             />
                         </div>
                         <div className="space-y-2">
                              <label className="text-sm font-medium">Total Marks</label>

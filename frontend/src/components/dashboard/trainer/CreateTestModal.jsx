@@ -4,6 +4,7 @@ import api from '../../../services/api';
 import { Button } from '../../ui/button';
 import { Input } from '../../ui/input';
 import { Textarea } from '../../ui/textarea';
+import DateTimePicker from '../../ui/DateTimePicker';
 
 const CreateTestModal = ({ batchId, onClose, onSuccess }) => {
     const [step, setStep] = useState(1); // 1: Test Details, 2: Questions
@@ -14,7 +15,7 @@ const CreateTestModal = ({ batchId, onClose, onSuccess }) => {
         title: '',
         description: '',
         duration: 60,
-        startTime: '',
+        startTime: null, // Date object for picker
         endTime: ''
     });
 
@@ -76,6 +77,7 @@ const CreateTestModal = ({ batchId, onClose, onSuccess }) => {
         try {
             const payload = {
                 ...testData,
+                startTime: testData.startTime ? testData.startTime.toISOString() : '',
                 batchId,
                 questions
             };
@@ -132,10 +134,11 @@ const CreateTestModal = ({ batchId, onClose, onSuccess }) => {
                                 </div>
                                 <div className="space-y-2">
                                     <label className="text-sm font-medium">Start Time</label>
-                                    <Input 
-                                        type="datetime-local"
-                                        value={testData.startTime}
-                                        onChange={(e) => setTestData({...testData, startTime: e.target.value})}
+                                    <DateTimePicker
+                                        selected={testData.startTime}
+                                        onChange={(date) => setTestData({...testData, startTime: date})}
+                                        placeholderText="Pick start date & time"
+                                        minDate={new Date()}
                                     />
                                 </div>
                             </div>

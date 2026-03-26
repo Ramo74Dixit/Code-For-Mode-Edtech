@@ -2,16 +2,17 @@ import React, { useState, useEffect } from 'react';
 import Modal from '../../ui/Modal';
 import { Input } from '../../ui/input';
 import { Button } from '../../ui/button';
+import DateTimePicker from '../../ui/DateTimePicker';
 import axios from 'axios';
 
 const ScheduleLiveModal = ({ isOpen, onClose, onSessionScheduled }) => {
     const [formData, setFormData] = useState({
         title: '',
         description: '',
-        batch: '', // batchId
+        batch: '',
         youtubeStreamKey: '',
         youtubeLiveUrl: '',
-        startDateTime: '', // Temporary for UI
+        startDateTime: null, // Date object for picker
         duration: 60
     });
     const [batches, setBatches] = useState([]);
@@ -45,6 +46,10 @@ const ScheduleLiveModal = ({ isOpen, onClose, onSessionScheduled }) => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (!formData.startDateTime) {
+            setError("Please select a start time");
+            return;
+        }
         setLoading(true);
         setError(null);
 
@@ -73,7 +78,7 @@ const ScheduleLiveModal = ({ isOpen, onClose, onSessionScheduled }) => {
                 setFormData({ 
                     title: '', description: '', batch: batches[0]?._id || '', 
                     youtubeStreamKey: '', youtubeLiveUrl: '', 
-                    startDateTime: '', duration: 60 
+                    startDateTime: null, duration: 60 
                 });
             }
         } catch (err) {
@@ -112,7 +117,7 @@ const ScheduleLiveModal = ({ isOpen, onClose, onSessionScheduled }) => {
                 <div className="space-y-2">
                     <label className="text-sm font-medium">YouTube Live URL</label>
                     <Input name="youtubeLiveUrl" value={formData.youtubeLiveUrl} onChange={handleChange} required placeholder="https://youtube.com/live/..." />
-                    <p className="text-xs text-muted-foreground">This is the link students will use to watch (e.g., from the Share button).</p>
+                    <p className="text-xs text-muted-foreground">This is the link students will use to watch.</p>
                 </div>
 
                 <div className="space-y-2">
@@ -123,7 +128,13 @@ const ScheduleLiveModal = ({ isOpen, onClose, onSessionScheduled }) => {
                 <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                         <label className="text-sm font-medium">Start Time</label>
-                        <Input type="datetime-local" name="startDateTime" value={formData.startDateTime} onChange={handleChange} required />
+                        <DateTimePicker
+                            selected={formData.startDateTime}
+                            onChange={(date) => setFormData({ ...formData, startDateTime: date })}
+                            placeholderText="Pick date & time"
+                            minDate={new Date()}
+                            required
+                        />
                     </div>
                     <div className="space-y-2">
                         <label className="text-sm font-medium">Duration (mins)</label>

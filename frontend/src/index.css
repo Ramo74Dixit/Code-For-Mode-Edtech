@@ -154,3 +154,95 @@
   background-size: cover;
   background-position: center;
 }
+
+/* ─── React DatePicker Dark Theme ─── */
+.react-datepicker-popper {
+  z-index: 9999 !important;
+}
+
+.react-datepicker {
+  background-color: #0f172a !important;
+  border: 1px solid #1e293b !important;
+  border-radius: 0.75rem !important;
+  font-family: inherit !important;
+  box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5) !important;
+  overflow: hidden;
+}
+
+.react-datepicker__header {
+  background-color: #1e293b !important;
+  border-bottom: 1px solid #334155 !important;
+  padding-top: 12px !important;
+}
+
+.react-datepicker__current-month,
+.react-datepicker__day-name,
+.react-datepicker-time__header {
+  color: #e2e8f0 !important;
+}
+
+.react-datepicker__day {
+  color: #cbd5e1 !important;
+  border-radius: 8px !important;
+}
+
+.react-datepicker__day:hover {
+  background-color: #334155 !important;
+  color: white !important;
+}
+
+.react-datepicker__day--selected,
+.react-datepicker__day--keyboard-selected {
+  background-color: #6366f1 !important;
+  color: white !important;
+}
+
+.react-datepicker__day--today {
+  font-weight: 700 !important;
+  color: #818cf8 !important;
+}
+
+.react-datepicker__day--disabled {
+  color: #475569 !important;
+}
+
+.react-datepicker__navigation-icon::before {
+  border-color: #94a3b8 !important;
+}
+
+.react-datepicker__navigation:hover *::before {
+  border-color: white !important;
+}
+
+/* Time picker */
+.react-datepicker__time-container {
+  border-left: 1px solid #1e293b !important;
+}
+
+.react-datepicker__time {
+  background-color: #0f172a !important;
+}
+
+.react-datepicker__time-list-item {
+  color: #cbd5e1 !important;
+}
+
+.react-datepicker__time-list-item:hover {
+  background-color: #334155 !important;
+  color: white !important;
+}
+
+.react-datepicker__time-list-item--selected {
+  background-color: #6366f1 !important;
+  color: white !important;
+}
+
+.react-datepicker__triangle {
+  display: none !important;
+}
+
+/* Portal container */
+#datepicker-portal {
+  position: relative;
+  z-index: 9999;
+}
