@@ -14,6 +14,7 @@ import {
   MessageSquare,
   Bell,
   Bot,
+  GraduationCap,
   FileText,
   FolderOpen
 } from 'lucide-react';
@@ -52,7 +53,8 @@ const MainLayout = () => {
     { icon: FolderOpen, label: 'Materials', href: '/materials' },
     { icon: MessageSquare, label: 'Community', href: '/community' },
     { icon: Bell, label: 'Announcements', href: '/announcements' },
-    { icon: Bot, label: 'Interview Coach', href: '/interview' },
+    { icon: Bot,           label: 'Interview Coach', href: '/interview' },
+    { icon: GraduationCap, label: 'AI Tutor',        href: '/ai-tutor' },
   ];
 
   if (user?.role === 'admin') {

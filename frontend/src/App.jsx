@@ -20,6 +20,7 @@ import TrainerProfile from './pages/profile/TrainerProfile';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AnnouncementList from './pages/announcements/AnnouncementList';
 import InterviewCoach from './pages/ai/InterviewCoach';
+import AiTutor from './pages/ai/AiTutor';
 import MaterialList from './pages/materials/MaterialList';
 
 // Temporary protected route wrapper
@@ -67,6 +68,7 @@ function App() {
               <Route path="community" element={<Community />} />
               <Route path="announcements" element={<AnnouncementList />} />
               <Route path="interview" element={<InterviewCoach />} />
+              <Route path="ai-tutor" element={<AiTutor />} />
               <Route path="profile" element={<Profile />} />
               <Route path="trainer/:id" element={<TrainerProfile />} />
               <Route path="admin" element={<AdminDashboard />} />

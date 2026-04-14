@@ -46,3 +46,75 @@ exports.endInterview = async (req, res) => {
     res.status(500).json({ success: false, message: "Failed to generate report." });
   }
 };
+
+// ─────────────────────────────────────────────────────────────
+// AI TUTOR ENDPOINTS
+// ─────────────────────────────────────────────────────────────
+
+// @desc    Generate a lesson plan for a topic
+// @route   POST /api/ai/tutor/lesson-plan
+// @access  Private
+exports.getTutorLessonPlan = async (req, res) => {
+  try {
+    const { topic } = req.body;
+    if (!topic || !topic.trim()) {
+      return res.status(400).json({ success: false, message: 'Topic is required.' });
+    }
+    const plan = await aiService.generateLessonPlan(topic.trim());
+    res.json({ success: true, data: plan });
+  } catch (error) {
+    console.error('Tutor Lesson Plan Error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Teach one section of a lesson
+// @route   POST /api/ai/tutor/teach
+// @access  Private
+exports.tutorTeachSection = async (req, res) => {
+  try {
+    const { topic, sectionTitle, sectionIndex, totalSections } = req.body;
+    if (!topic || !sectionTitle) {
+      return res.status(400).json({ success: false, message: 'topic and sectionTitle are required.' });
+    }
+    const data = await aiService.teachSection(topic, sectionTitle, sectionIndex || 0, totalSections || 3);
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error('Tutor Teach Section Error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Answer a follow-up question from the student
+// @route   POST /api/ai/tutor/followup
+// @access  Private
+exports.tutorFollowup = async (req, res) => {
+  try {
+    const { topic, question } = req.body;
+    if (!topic || !question) {
+      return res.status(400).json({ success: false, message: 'topic and question are required.' });
+    }
+    const data = await aiService.answerFollowup(topic, question);
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error('Tutor Followup Error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Generate a mini quiz for the completed lesson
+// @route   POST /api/ai/tutor/quiz
+// @access  Private
+exports.tutorGenerateQuiz = async (req, res) => {
+  try {
+    const { topic, sections } = req.body;
+    if (!topic) {
+      return res.status(400).json({ success: false, message: 'topic is required.' });
+    }
+    const data = await aiService.generateQuiz(topic, sections || []);
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error('Tutor Quiz Error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
