@@ -145,7 +145,7 @@ const DiagramCard = ({ type, title, data }) => {
 // ─────────────────────────────────────────────────────────────
 
 const AiTutor = () => {
-  const [phase, setPhase] = useState('setup'); // setup | teaching | quiz | complete
+  const [phase, setPhase] = useState('setup');
   const [topic, setTopic] = useState('');
   const [lessonPlan, setLessonPlan] = useState(null);
   const [currentSectionIdx, setCurrentSectionIdx] = useState(0);
@@ -153,6 +153,8 @@ const AiTutor = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const [availableVoices, setAvailableVoices] = useState([]);
+  const [selectedVoiceURI, setSelectedVoiceURI] = useState(null);
   const [studentInput, setStudentInput] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [quizData, setQuizData] = useState(null);
@@ -203,34 +205,62 @@ const AiTutor = () => {
     }
   };
 
-  // ── TTS — Indian English voice ──
+  // ── Load & score available voices ──
+  const scoreVoice = (v) => {
+    let score = 0;
+    const n = v.name;
+    // Microsoft Neural Online voices are the best quality available
+    if (n.includes('Online') || n.includes('Natural')) score += 60;
+    if (n.includes('Microsoft'))                       score += 30;
+    if (n.includes('Google') && v.lang.startsWith('en')) score += 20;
+    // Prefer female-sounding voices for a teacher feel
+    if (['Aria','Zira','Hazel','Karen','Moira','Tessa','Susan','Heera','Veena','Samantha']
+        .some(fn => n.includes(fn)))                   score += 15;
+    // English preferred; en-IN gets bonus for Indian feel
+    if (v.lang === 'en-IN')  score += 12;
+    if (v.lang === 'en-GB')  score += 8;
+    if (v.lang === 'en-US')  score += 6;
+    if (!v.lang.startsWith('en')) score -= 20;
+    // Penalise raw local system voices (usually robotic)
+    if (v.localService && !n.includes('Microsoft') && !n.includes('Google')) score -= 12;
+    return score;
+  };
+
+  useEffect(() => {
+    const loadVoices = () => {
+      const voices = window.speechSynthesis?.getVoices() || [];
+      const englishVoices = voices
+        .filter(v => v.lang.startsWith('en'))
+        .sort((a, b) => scoreVoice(b) - scoreVoice(a));
+      setAvailableVoices(englishVoices);
+      // Auto-select the best voice if none chosen yet
+      if (!selectedVoiceURI && englishVoices.length > 0) {
+        setSelectedVoiceURI(englishVoices[0].voiceURI);
+      }
+    };
+    loadVoices();
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+  }, []);
+
+  // ── TTS ──
   const speak = useCallback((text) => {
     if (!voiceEnabled || !window.speechSynthesis) return;
     window.speechSynthesis.cancel();
     setIsSpeaking(true);
     const utterance = new SpeechSynthesisUtterance(text);
 
-    const doSpeak = () => {
-      const voices = window.speechSynthesis.getVoices();
-      const voice =
-        voices.find(v => v.lang === 'en-IN' && v.name.toLowerCase().includes('female')) ||
-        voices.find(v => v.lang === 'en-IN') ||
-        voices.find(v => v.name.includes('Google UK English Female')) ||
-        voices[0];
-      if (voice) utterance.voice = voice;
-      utterance.rate  = 0.88;
-      utterance.pitch = 1.1;
-      utterance.onend   = () => setIsSpeaking(false);
-      utterance.onerror = () => setIsSpeaking(false);
-      window.speechSynthesis.speak(utterance);
-    };
+    const voices = window.speechSynthesis.getVoices();
+    const voice = voices.find(v => v.voiceURI === selectedVoiceURI)
+      || voices.filter(v => v.lang.startsWith('en')).sort((a,b) => scoreVoice(b)-scoreVoice(a))[0]
+      || voices[0];
 
-    if (window.speechSynthesis.getVoices().length > 0) {
-      doSpeak();
-    } else {
-      window.speechSynthesis.onvoiceschanged = doSpeak;
-    }
-  }, [voiceEnabled]);
+    if (voice) utterance.voice = voice;
+    utterance.rate  = 0.9;   // slightly slower = feels like a real teacher
+    utterance.pitch = 1.05;
+    utterance.onend   = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
+    window.speechSynthesis.speak(utterance);
+  }, [voiceEnabled, selectedVoiceURI]);
 
   const stopSpeaking = () => {
     window.speechSynthesis?.cancel();
@@ -763,6 +793,7 @@ const AiTutor = () => {
 
         {/* Voice + Reset controls */}
         <div className="p-4 border-t border-violet-900/30 space-y-2">
+          {/* Voice on/off toggle with waveform */}
           <button
             onClick={() => { setVoiceEnabled(v => !v); if (voiceEnabled) stopSpeaking(); }}
             className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm transition-all border ${
@@ -785,6 +816,26 @@ const AiTutor = () => {
               </span>
             )}
           </button>
+
+          {/* Voice picker dropdown */}
+          {voiceEnabled && availableVoices.length > 0 && (
+            <div className="space-y-1">
+              <label className="text-slate-500 text-xs px-1">Voice:</label>
+              <select
+                id="ai-tutor-voice-picker"
+                value={selectedVoiceURI || ''}
+                onChange={e => setSelectedVoiceURI(e.target.value)}
+                className="w-full bg-slate-800/60 border border-slate-700/50 text-slate-300 text-xs rounded-xl px-3 py-2 outline-none focus:border-violet-500/60 cursor-pointer"
+              >
+                {availableVoices.map(v => (
+                  <option key={v.voiceURI} value={v.voiceURI}>
+                    {v.name.replace('Microsoft ', '').replace(' Online (Natural)', ' ✨').replace('Google ', 'G ')}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <button
             onClick={handleReset}
             className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs text-slate-500 hover:text-slate-300 hover:bg-slate-800/30 transition-all"
